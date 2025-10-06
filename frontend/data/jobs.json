@@ -1,0 +1,105 @@
+{
+  "data": [
+    {
+      "id": 1,
+      "title": "Frontend Developer",
+      "description": "We are looking for a talented Frontend Developer to join our team.",
+      "requirements": "React, TypeScript, 2+ years experience",
+      "location": "San Francisco, CA",
+      "salary_range": "$80k - $120k",
+      "recruiter_id": 2,
+      "created_at": "2025-01-01T00:00:00.000Z"
+    },
+    {
+      "id": 2,
+      "title": "Backend Engineer",
+      "description": "Join our backend team to build scalable APIs and services.",
+      "requirements": "Node.js, PostgreSQL, AWS experience",
+      "location": "Remote",
+      "salary_range": "$90k - $140k",
+      "recruiter_id": 2,
+      "created_at": "2025-01-01T00:00:00.000Z"
+    },
+    {
+      "id": 3,
+      "title": "Full Stack Developer",
+      "description": "Work on both frontend and backend of our platform.",
+      "requirements": "React, Node.js, MongoDB, 3+ years experience",
+      "location": "New York, NY",
+      "salary_range": "$100k - $150k",
+      "recruiter_id": 2,
+      "created_at": "2025-01-01T00:00:00.000Z"
+    },
+    {
+      "id": 4,
+      "title": "Senior Python Developer",
+      "description": "Lead our Python development team and architect scalable solutions.",
+      "requirements": "Python, Django, 5+ years experience, Team leadership",
+      "location": "Austin, TX",
+      "salary_range": "$120k - $160k",
+      "recruiter_id": 10,
+      "created_at": "2025-01-05T00:00:00.000Z"
+    },
+    {
+      "id": 5,
+      "title": "Mobile App Developer",
+      "description": "Build beautiful mobile applications for iOS and Android.",
+      "requirements": "React Native or Flutter, 3+ years experience",
+      "location": "Seattle, WA",
+      "salary_range": "$95k - $135k",
+      "recruiter_id": 10,
+      "created_at": "2025-01-06T00:00:00.000Z"
+    },
+    {
+      "id": 6,
+      "title": "DevOps Engineer",
+      "description": "Manage our cloud infrastructure and CI/CD pipelines.",
+      "requirements": "Kubernetes, Docker, AWS/GCP, Terraform",
+      "location": "Remote",
+      "salary_range": "$110k - $150k",
+      "recruiter_id": 11,
+      "created_at": "2025-01-07T00:00:00.000Z"
+    },
+    {
+      "id": 7,
+      "title": "Data Scientist",
+      "description": "Analyze data and build machine learning models to drive insights.",
+      "requirements": "Python, TensorFlow/PyTorch, SQL, Statistics",
+      "location": "Boston, MA",
+      "salary_range": "$105k - $145k",
+      "recruiter_id": 11,
+      "created_at": "2025-01-08T00:00:00.000Z"
+    },
+    {
+      "id": 8,
+      "title": "UI/UX Designer",
+      "description": "Design intuitive and beautiful user interfaces for our products.",
+      "requirements": "Figma, Adobe XD, User Research, 2+ years experience",
+      "location": "Los Angeles, CA",
+      "salary_range": "$75k - $110k",
+      "recruiter_id": 2,
+      "created_at": "2025-01-09T00:00:00.000Z"
+    },
+    {
+      "id": 9,
+      "title": "Cloud Architect",
+      "description": "Design and implement cloud-native architectures at scale.",
+      "requirements": "AWS/Azure/GCP, Microservices, 7+ years experience",
+      "location": "Remote",
+      "salary_range": "$140k - $180k",
+      "recruiter_id": 10,
+      "created_at": "2025-01-10T00:00:00.000Z"
+    },
+    {
+      "id": 10,
+      "title": "Junior Frontend Developer",
+      "description": "Entry-level position for passionate developers to grow their skills.",
+      "requirements": "HTML, CSS, JavaScript, React basics",
+      "location": "Chicago, IL",
+      "salary_range": "$60k - $80k",
+      "recruiter_id": 11,
+      "created_at": "2025-01-11T00:00:00.000Z"
+    }
+  ],
+  "nextId": 11
+}
