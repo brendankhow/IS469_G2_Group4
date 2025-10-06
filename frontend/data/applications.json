@@ -1,0 +1,113 @@
+{
+  "data": [
+    {
+      "id": 1,
+      "job_id": 1,
+      "student_id": 1,
+      "cover_letter": "I am excited to apply for the Frontend Developer position. With my strong background in React and TypeScript, I believe I would be a great fit for your team. I have 3 years of experience building responsive web applications and am passionate about creating excellent user experiences.",
+      "resume_data": null,
+      "status": "pending",
+      "created_at": "2025-01-12T10:30:00.000Z"
+    },
+    {
+      "id": 2,
+      "job_id": 2,
+      "student_id": 3,
+      "cover_letter": "I am writing to express my interest in the Backend Engineer position. My experience with Node.js, PostgreSQL, and AWS makes me well-suited for this role. I have built and deployed multiple scalable APIs and am excited about the opportunity to contribute to your backend team.",
+      "resume_data": null,
+      "status": "accepted",
+      "created_at": "2025-01-12T11:00:00.000Z"
+    },
+    {
+      "id": 3,
+      "job_id": 3,
+      "student_id": 4,
+      "cover_letter": "I am applying for the Full Stack Developer position. With my expertise in both React and Node.js, along with MongoDB experience, I can contribute to all aspects of your platform. I have 4 years of full-stack development experience and am eager to take on new challenges.",
+      "resume_data": null,
+      "status": "pending",
+      "created_at": "2025-01-12T14:20:00.000Z"
+    },
+    {
+      "id": 4,
+      "job_id": 1,
+      "student_id": 5,
+      "cover_letter": "I would love to join your team as a Frontend Developer. My experience with TypeScript and Angular has given me a strong foundation in modern frontend development. I am a quick learner and excited to work with React in a professional setting.",
+      "resume_data": null,
+      "status": "rejected",
+      "created_at": "2025-01-13T09:15:00.000Z"
+    },
+    {
+      "id": 5,
+      "job_id": 5,
+      "student_id": 6,
+      "cover_letter": "I am thrilled to apply for the Mobile App Developer position. With my extensive experience in React Native and iOS development, I have shipped multiple successful mobile applications. I am passionate about creating smooth, performant mobile experiences.",
+      "resume_data": null,
+      "status": "accepted",
+      "created_at": "2025-01-13T10:45:00.000Z"
+    },
+    {
+      "id": 6,
+      "job_id": 4,
+      "student_id": 3,
+      "cover_letter": "I am interested in the Senior Python Developer role. My 6 years of Python and Django experience, combined with my leadership skills, make me an ideal candidate. I have successfully led teams of 5+ developers and architected multiple large-scale applications.",
+      "resume_data": null,
+      "status": "pending",
+      "created_at": "2025-01-13T13:30:00.000Z"
+    },
+    {
+      "id": 7,
+      "job_id": 6,
+      "student_id": 8,
+      "cover_letter": "I am applying for the DevOps Engineer position. My expertise in Kubernetes, Docker, and CI/CD pipelines aligns perfectly with your requirements. I have managed cloud infrastructure for multiple high-traffic applications and am passionate about automation.",
+      "resume_data": null,
+      "status": "pending",
+      "created_at": "2025-01-14T08:00:00.000Z"
+    },
+    {
+      "id": 8,
+      "job_id": 7,
+      "student_id": 4,
+      "cover_letter": "I am excited about the Data Scientist opportunity. While my primary background is in software engineering, I have completed several machine learning projects and am proficient in Python, TensorFlow, and statistical analysis. I am eager to transition into data science.",
+      "resume_data": null,
+      "status": "rejected",
+      "created_at": "2025-01-14T11:20:00.000Z"
+    },
+    {
+      "id": 9,
+      "job_id": 10,
+      "student_id": 1,
+      "cover_letter": "Although I have more experience than required for the Junior Frontend Developer position, I am interested in this role as it aligns with my desire to work in Chicago. I would bring strong mentorship capabilities to help grow junior team members.",
+      "resume_data": null,
+      "status": "pending",
+      "created_at": "2025-01-14T15:45:00.000Z"
+    },
+    {
+      "id": 10,
+      "job_id": 3,
+      "student_id": 7,
+      "cover_letter": "I am applying for the Full Stack Developer position. My experience with Vue.js and Node.js, combined with my GraphQL expertise, would allow me to contribute effectively to your platform. I am excited about the opportunity to work in New York.",
+      "resume_data": null,
+      "status": "accepted",
+      "created_at": "2025-01-15T09:30:00.000Z"
+    },
+    {
+      "id": 11,
+      "job_id": 9,
+      "student_id": 9,
+      "cover_letter": "I am interested in the Cloud Architect position. While I am early in my career, my deep knowledge of systems programming with Rust and my passion for cloud technologies make me eager to grow into this role. I am a fast learner and highly motivated.",
+      "resume_data": null,
+      "status": "rejected",
+      "created_at": "2025-01-15T10:00:00.000Z"
+    },
+    {
+      "id": 12,
+      "job_id": 2,
+      "student_id": 1,
+      "cover_letter": "I am applying for the Backend Engineer position. While my primary expertise is in frontend development, I have solid Node.js experience and am eager to deepen my backend skills. I am a quick learner and excited about this opportunity to grow.",
+      "resume_data": null,
+      "status": "pending",
+      "created_at": "2025-01-15T14:20:00.000Z"
+    }
+  ],
+  "nextId": 13
+}
