@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Loader2, Mail, Phone, FileText, Sparkles, AlertCircle, Calendar } from "lucide-react"
+import { Loader2, Mail, Phone, FileText, Sparkles, AlertCircle, Calendar, Download, Eye } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 
 interface Applicant {
@@ -16,6 +16,8 @@ interface Applicant {
   student_phone?: string
   student_skills?: string
   cover_letter?: string
+  resume_url?: string
+  resume_filename?: string
   status: "pending" | "accepted" | "rejected"
   created_at: string
 }
@@ -121,6 +123,18 @@ export default function ApplicantsPage() {
         return "bg-destructive/10 text-destructive border-destructive/20"
       default:
         return "bg-yellow-500/10 text-yellow-500 border-yellow-500/20"
+    }
+  }
+
+  const handleViewResume = (resumeUrl: string) => {
+    if (resumeUrl) {
+      window.open(resumeUrl, '_blank')
+    } else {
+      toast({
+        title: "Resume not available",
+        description: "This applicant has not uploaded a resume",
+        variant: "destructive",
+      })
     }
   }
 
@@ -246,6 +260,18 @@ export default function ApplicantsPage() {
                     <FileText className="mr-2 h-4 w-4" />
                     View Cover Letter
                   </Button>
+                  
+                  {applicant.resume_url && (
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={() => handleViewResume(applicant.resume_url!)}
+                    >
+                      <Eye className="mr-2 h-4 w-4" />
+                      View Resume
+                    </Button>
+                  )}
+                  
                   <Button
                     variant="outline"
                     size="sm"

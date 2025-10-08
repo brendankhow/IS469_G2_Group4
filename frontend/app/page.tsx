@@ -2,29 +2,16 @@
 import { Button } from "@/components/ui/button"
 import { Sparkles, Users, Calendar, FileText } from "lucide-react"
 import { useRouter } from "next/navigation"
-import { useState } from "react"
 
 export default function HomePage() {
   const router = useRouter()
-  const [loading, setLoading] = useState<"student" | "recruiter" | null>(null)
 
-  const handleLogin = async (role: "student" | "recruiter") => {
-    setLoading(role)
-    try {
-      const response = await fetch("/api/simple-login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ role }),
-      })
+  const handleStudentLogin = () => {
+    router.push("/student/login")
+  }
 
-      if (response.ok) {
-        router.push(role === "student" ? "/student/dashboard" : "/recruiter/dashboard")
-      }
-    } catch (error) {
-      console.error("Login failed:", error)
-    } finally {
-      setLoading(null)
-    }
+  const handleRecruiterLogin = () => {
+    router.push("/recruiter/login")
   }
 
   return (
@@ -54,19 +41,17 @@ export default function HomePage() {
             <Button
               size="lg"
               className="w-full sm:w-auto"
-              onClick={() => handleLogin("student")}
-              disabled={loading !== null}
+              onClick={handleStudentLogin}
             >
-              {loading === "student" ? "Logging in..." : "Login as Student"}
+              Sign In as Student
             </Button>
             <Button
               size="lg"
               variant="outline"
               className="w-full sm:w-auto bg-transparent"
-              onClick={() => handleLogin("recruiter")}
-              disabled={loading !== null}
+              onClick={handleRecruiterLogin}
             >
-              {loading === "recruiter" ? "Logging in..." : "Login as Recruiter"}
+              Sign In as Recruiter
             </Button>
           </div>
         </div>

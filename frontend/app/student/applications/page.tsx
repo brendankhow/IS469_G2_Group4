@@ -19,11 +19,24 @@ interface Application {
   cover_letter?: string
 }
 
+interface Job {
+  id: string
+  title: string
+  description: string
+  requirements?: string
+  location?: string
+  salary_range?: string
+  recruiter_id: string
+  created_at: string
+}
+
 export default function ApplicationsPage() {
   const { toast } = useToast()
   const [applications, setApplications] = useState<Application[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedApplication, setSelectedApplication] = useState<Application | null>(null)
+  const [selectedJob, setSelectedJob] = useState<Job | null>(null)
+  const [jobDetailsLoading, setJobDetailsLoading] = useState(false)
 
   useEffect(() => {
     fetchApplications()
@@ -42,6 +55,23 @@ export default function ApplicationsPage() {
       })
     } finally {
       setLoading(false)
+    }
+  }
+
+  const fetchJobDetails = async (jobId: number) => {
+    setJobDetailsLoading(true)
+    try {
+      const response = await fetch(`/api/jobs/${jobId}`)
+      const data = await response.json()
+      setSelectedJob(data.job)
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to load job details",
+        variant: "destructive",
+      })
+    } finally {
+      setJobDetailsLoading(false)
     }
   }
 
@@ -109,14 +139,24 @@ export default function ApplicationsPage() {
                     {application.salary_range}
                   </div>
                 )}
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="mt-4 w-full bg-transparent"
-                  onClick={() => setSelectedApplication(application)}
-                >
-                  View Cover Letter
-                </Button>
+                <div className="flex gap-2 mt-4">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="flex-1"
+                    onClick={() => setSelectedApplication(application)}
+                  >
+                    View Cover Letter
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="flex-1"
+                    onClick={() => fetchJobDetails(application.job_id)}
+                  >
+                    View Job Details
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           ))}
@@ -139,6 +179,56 @@ export default function ApplicationsPage() {
                 {selectedApplication.cover_letter || "No cover letter available"}
               </div>
               <Button className="mt-4 w-full" onClick={() => setSelectedApplication(null)}>
+                Close
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Job Details Modal */}
+      {selectedJob && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm"
+          onClick={() => setSelectedJob(null)}
+        >
+          <Card className="max-h-[80vh] w-full max-w-2xl overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <CardHeader>
+              <CardTitle>{selectedJob.title}</CardTitle>
+              <CardDescription>Job Details</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <h4 className="font-semibold mb-2">Description</h4>
+                <p className="text-sm text-muted-foreground">{selectedJob.description}</p>
+              </div>
+
+              {selectedJob.location && (
+                <div className="flex items-center gap-2 text-sm">
+                  <MapPin className="h-4 w-4" />
+                  <span>{selectedJob.location}</span>
+                </div>
+              )}
+
+              {selectedJob.salary_range && (
+                <div className="flex items-center gap-2 text-sm">
+                  <DollarSign className="h-4 w-4" />
+                  <span>{selectedJob.salary_range}</span>
+                </div>
+              )}
+
+              {selectedJob.requirements && (
+                <div>
+                  <h4 className="font-semibold mb-2">Requirements</h4>
+                  <p className="text-sm text-muted-foreground">{selectedJob.requirements}</p>
+                </div>
+              )}
+
+              <div className="text-xs text-muted-foreground">
+                Posted on {new Date(selectedJob.created_at).toLocaleDateString()}
+              </div>
+
+              <Button className="mt-4 w-full" onClick={() => setSelectedJob(null)}>
                 Close
               </Button>
             </CardContent>

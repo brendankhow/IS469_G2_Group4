@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Loader2, Upload } from "lucide-react"
+import { Loader2, Upload, Eye, Trash2 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 
 interface UserProfile {
@@ -25,7 +25,9 @@ export default function ProfilePage() {
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [uploadingResume, setUploadingResume] = useState(false)
   const [resumeFile, setResumeFile] = useState<File | null>(null)
+  const [currentResumeUrl, setCurrentResumeUrl] = useState<string | null>(null)
 
   useEffect(() => {
     fetchProfile()
@@ -36,6 +38,10 @@ export default function ProfilePage() {
       const response = await fetch("/api/auth/me")
       const data = await response.json()
       setProfile(data.user)
+      // Set the current resume URL from the profile data
+      if (data.user?.resume_url) {
+        setCurrentResumeUrl(data.user.resume_url)
+      }
     } catch (error) {
       toast({
         title: "Error",
@@ -48,23 +54,156 @@ export default function ProfilePage() {
   }
 
   const handleSave = async () => {
+    if (!profile) return
+    
     setSaving(true)
     try {
-      // Mock save - in production, this would call an API endpoint
-      await new Promise((resolve) => setTimeout(resolve, 1000))
+      // First, upload resume if a new one is selected
+      let resumeUrl = currentResumeUrl
+      if (resumeFile) {
+        const uploadedUrl = await uploadResume()
+        if (uploadedUrl) {
+          resumeUrl = uploadedUrl
+        }
+      }
+
+      // Then update profile with form data (always save profile info)
+      const response = await fetch("/api/auth/me", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: profile.name,
+          phone: profile.phone,
+          skills: profile.skills,
+          hobbies: profile.hobbies,
+          resume_url: resumeUrl,
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to update profile")
+      }
 
       toast({
-        title: "Success",
-        description: "Profile updated successfully",
+        title: "✅ Profile saved successfully!",
+        description: resumeFile 
+          ? "Your profile and resume have been updated" 
+          : "Your profile has been updated",
       })
+
+      // Clear the resume file input after successful upload
+      setResumeFile(null)
+      if (resumeUrl) {
+        setCurrentResumeUrl(resumeUrl)
+      }
+      
+      // Refresh profile data from server
+      await fetchProfile()
     } catch (error) {
       toast({
         title: "Error",
-        description: "Failed to update profile",
+        description: error instanceof Error ? error.message : "Failed to update profile",
         variant: "destructive",
       })
     } finally {
       setSaving(false)
+    }
+  }
+
+  const uploadResume = async (): Promise<string | null> => {
+    if (!resumeFile || !profile) return null
+
+    try {
+      const formData = new FormData()
+      formData.append("file", resumeFile) // Changed from "resume" to "file"
+
+      const response = await fetch("/api/applications/resume", {
+        method: "POST",
+        body: formData,
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || "Failed to upload resume")
+      }
+
+      const data = await response.json()
+      
+      toast({
+        title: "✅ Resume uploaded",
+        description: "Your resume has been uploaded successfully",
+      })
+
+      return data.resumeUrl
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to upload resume",
+        variant: "destructive",
+      })
+      throw error
+    }
+  }
+
+  const handleRemoveResume = async () => {
+    if (!currentResumeUrl || !profile) return
+
+    try {
+      setSaving(true)
+
+      // First, delete the file from storage bucket
+      const deleteResponse = await fetch("/api/applications/resume", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ resumePath: currentResumeUrl }),
+      })
+
+      if (!deleteResponse.ok) {
+        const errorData = await deleteResponse.json()
+        throw new Error(errorData.error || "Failed to delete resume from storage")
+      }
+
+      // Then update profile to remove resume_url
+      const response = await fetch("/api/auth/me", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: profile.name,
+          phone: profile.phone,
+          skills: profile.skills,
+          hobbies: profile.hobbies,
+          resume_url: null, // Remove the resume URL
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to remove resume from profile")
+      }
+
+      // Clear local state
+      setCurrentResumeUrl(null)
+      setResumeFile(null)
+
+      toast({
+        title: "✅ Resume removed",
+        description: "Your resume has been removed successfully",
+      })
+
+      await fetchProfile()
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to remove resume",
+        variant: "destructive",
+      })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleViewResume = () => {
+    if (currentResumeUrl) {
+      window.open(currentResumeUrl, '_blank')
     }
   }
 
@@ -188,10 +327,43 @@ export default function ProfilePage() {
               </label>
             </div>
             {resumeFile && (
-              <Button className="w-full">
-                <Upload className="mr-2 h-4 w-4" />
-                Upload Resume
-              </Button>
+              <div className="space-y-2">
+                <div className="rounded-lg bg-primary/10 p-3 text-sm">
+                  <p className="font-medium text-primary">📄 {resumeFile.name}</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Ready to upload when you save your profile
+                  </p>
+                </div>
+              </div>
+            )}
+            {currentResumeUrl && !resumeFile && (
+              <div className="space-y-3">
+                <div className="rounded-lg bg-green-500/10 p-3 text-sm border border-green-500/20">
+                  <p className="font-medium text-green-600">✅ Resume uploaded</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    You can view, update, or remove your resume
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  <Button 
+                    variant="outline" 
+                    onClick={handleViewResume}
+                    className="flex-1"
+                  >
+                    <Eye className="mr-2 h-4 w-4" />
+                    View Resume
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    onClick={handleRemoveResume}
+                    disabled={saving}
+                    className="flex-1 text-red-600 hover:text-red-700 hover:bg-red-50"
+                  >
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    Remove Resume
+                  </Button>
+                </div>
+              </div>
             )}
           </CardContent>
         </Card>

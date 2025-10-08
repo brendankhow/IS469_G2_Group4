@@ -3,20 +3,43 @@
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { Briefcase, FileText, User, Home, Sparkles } from "lucide-react"
+import { Briefcase, FileText, User, Home, Sparkles, LogOut } from "lucide-react"
+import { useToast } from "@/hooks/use-toast"
+import { useState } from "react"
 
 export function StudentSidebar() {
   const pathname = usePathname()
   const router = useRouter()
+  const { toast } = useToast()
+  const [isLoggingOut, setIsLoggingOut] = useState(false)
 
-  const handleSwitchView = async () => {
-    await fetch("/api/simple-login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ role: "recruiter" }),
-    })
-    router.push("/recruiter/dashboard")
-    router.refresh()
+  const handleLogout = async () => {
+    setIsLoggingOut(true)
+    try {
+      const response = await fetch("/api/auth/logout", {
+        method: "POST",
+      })
+
+      if (!response.ok) {
+        throw new Error("Logout failed")
+      }
+
+      toast({
+        title: "Logged out successfully",
+        description: "See you next time!",
+      })
+
+      router.push("/login")
+      router.refresh()
+    } catch (error) {
+      toast({
+        title: "Logout failed",
+        description: "Please try again",
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoggingOut(false)
+    }
   }
 
   const navItems = [
@@ -59,9 +82,14 @@ export function StudentSidebar() {
             Home
           </Button>
         </Link>
-        <Button variant="outline" className="w-full justify-start bg-transparent" onClick={handleSwitchView}>
-          <User className="mr-2 h-4 w-4" />
-          Switch to Recruiter
+        <Button 
+          variant="destructive" 
+          className="w-full justify-start" 
+          onClick={handleLogout}
+          disabled={isLoggingOut}
+        >
+          <LogOut className="mr-2 h-4 w-4" />
+          {isLoggingOut ? "Logging out..." : "Logout"}
         </Button>
       </div>
     </div>

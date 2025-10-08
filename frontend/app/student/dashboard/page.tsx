@@ -5,18 +5,28 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Badge } from "@/components/ui/badge"
-import { MapPin, DollarSign, Loader2 } from "lucide-react"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import { MapPin, DollarSign, Loader2, AlertTriangle } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useToast } from "@/hooks/use-toast"
 
 interface Job {
-  id: number
+  id: string
   title: string
   description: string
   requirements?: string
   location?: string
   salary_range?: string
-  recruiter_id: number
+  recruiter_id: string
   created_at: string
 }
 
@@ -24,12 +34,45 @@ export default function StudentDashboardPage() {
   const router = useRouter()
   const { toast } = useToast()
   const [jobs, setJobs] = useState<Job[]>([])
-  const [selectedJobs, setSelectedJobs] = useState<number[]>([])
+  const [selectedJobs, setSelectedJobs] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
+  const [showResumeAlert, setShowResumeAlert] = useState(false)
+  const [hasResume, setHasResume] = useState(false)
+  const [appliedJobIds, setAppliedJobIds] = useState<Set<string>>(new Set())
 
   useEffect(() => {
-    fetchJobs()
+    checkResumeAndFetchJobs()
   }, [])
+
+  const checkResumeAndFetchJobs = async () => {
+    try {
+      // Check if user has uploaded a resume
+      const profileResponse = await fetch("/api/auth/me")
+      const profileData = await profileResponse.json()
+      
+      if (!profileData.user?.resume_url) {
+        setHasResume(false)
+        setShowResumeAlert(true)
+        setLoading(false)
+        return
+      }
+
+      setHasResume(true)
+      
+      // Fetch applications to determine which jobs are already applied to
+      await fetchApplications()
+      
+      // Fetch jobs only if resume exists
+      await fetchJobs()
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to load profile",
+        variant: "destructive",
+      })
+      setLoading(false)
+    }
+  }
 
   const fetchJobs = async () => {
     try {
@@ -47,7 +90,33 @@ export default function StudentDashboardPage() {
     }
   }
 
-  const toggleJobSelection = (jobId: number) => {
+  const fetchApplications = async () => {
+    try {
+      const response = await fetch("/api/applications")
+      const data = await response.json()
+      // Extract job IDs from applications
+      const appliedIds = new Set<string>()
+      data.applications.forEach((app: { job_id: string }) => {
+        appliedIds.add(app.job_id)
+      })
+      setAppliedJobIds(appliedIds)
+    } catch (error) {
+      // Silently fail - applications are not critical for job browsing
+      console.error("Failed to fetch applications:", error)
+    }
+  }
+
+  const toggleJobSelection = (jobId: string) => {
+    // Prevent selecting jobs already applied to
+    if (appliedJobIds.has(jobId)) {
+      toast({
+        title: "Already Applied",
+        description: "You have already applied to this job",
+        variant: "destructive",
+      })
+      return
+    }
+
     setSelectedJobs((prev) => {
       if (prev.includes(jobId)) {
         return prev.filter((id) => id !== jobId)
@@ -84,6 +153,60 @@ export default function StudentDashboardPage() {
     )
   }
 
+  // Show alert dialog if no resume
+  if (!hasResume && showResumeAlert) {
+    return (
+      <>
+        <AlertDialog open={showResumeAlert} onOpenChange={setShowResumeAlert}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle className="flex items-center gap-2">
+                <AlertTriangle className="h-5 w-5 text-amber-500" />
+                Resume Required
+              </AlertDialogTitle>
+              <AlertDialogDescription className="text-base">
+                You need to upload your resume before you can browse and apply for jobs. 
+                Please go to your profile page to upload your resume.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={() => router.push("/student/applications")}>
+                Go to Applications
+              </AlertDialogCancel>
+              <AlertDialogAction onClick={() => router.push("/student/profile")}>
+                Upload Resume
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+        
+        <div className="p-8">
+          <div className="mb-8">
+            <h1 className="mb-2 text-3xl font-bold">Browse Jobs</h1>
+            <p className="text-muted-foreground">Upload your resume to start browsing jobs</p>
+          </div>
+          
+          <Card className="border-amber-500/50 bg-amber-500/5">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-amber-700">
+                <AlertTriangle className="h-5 w-5" />
+                Resume Required
+              </CardTitle>
+              <CardDescription>
+                Please upload your resume in your profile to access job listings
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button onClick={() => router.push("/student/profile")}>
+                Go to Profile
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      </>
+    )
+  }
+
   return (
     <div className="p-8">
       <div className="mb-8">
@@ -108,13 +231,16 @@ export default function StudentDashboardPage() {
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         {jobs.map((job) => {
           const isSelected = selectedJobs.includes(job.id)
+          const isApplied = appliedJobIds.has(job.id)
           return (
             <Card
               key={job.id}
               className={`cursor-pointer transition-all ${
-                isSelected ? "border-primary bg-primary/5 shadow-lg shadow-primary/20" : "hover:border-primary/50"
+                isSelected ? "border-primary bg-primary/5 shadow-lg shadow-primary/20" : 
+                isApplied ? "border-green-500/50 bg-green-500/5" :
+                "hover:border-primary/50"
               }`}
-              onClick={() => toggleJobSelection(job.id)}
+              onClick={() => !isApplied && toggleJobSelection(job.id)}
             >
               <CardHeader>
                 <div className="flex items-start justify-between">
@@ -122,7 +248,14 @@ export default function StudentDashboardPage() {
                     <CardTitle className="text-lg">{job.title}</CardTitle>
                     <CardDescription className="mt-1 line-clamp-2">{job.description}</CardDescription>
                   </div>
-                  <Checkbox checked={isSelected} className="ml-2" />
+                  <div className="flex items-center gap-2">
+                    {isApplied && (
+                      <Badge className="bg-green-500/10 text-green-600 border-green-500/20">
+                        Applied
+                      </Badge>
+                    )}
+                    {!isApplied && <Checkbox checked={isSelected} className="ml-2" />}
+                  </div>
                 </div>
               </CardHeader>
               <CardContent className="space-y-2">

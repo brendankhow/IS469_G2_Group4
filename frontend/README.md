@@ -1,154 +1,295 @@
 # HireAI Platform
 
-A full-stack AI-powered job application platform built with Next.js, featuring automated cover letter generation, intelligent candidate matching, and streamlined recruitment workflows.
+A full-stack AI-powered job application platform built with Next.js## 📁 Project Structureand Supabase, featuring automated cover letter generation, intelligent candidate matching, and streamlined recruitment workflows.
 
-## Features
+## 📋 Prerequisites
+
+- **Node.js**: Version 20.0.0 or higher (required for @supabase/supabase-js)
+- **npm**: Version 10.0.0 or higher
+
+> ⚠️ **Important**: Node.js 18 and below are deprecated for Supabase. Please upgrade to Node.js 20 or later.
+
+## 🌟 Features
 
 ### For Students
 - Browse available job postings
 - Select up to 5 jobs for batch application
 - AI-powered cover letter generation
 - Interactive AI chatbot for cover letter refinement
+- Upload PDF resumes with secure storage
 - Application tracking dashboard
-- Profile management with resume upload
+- Profile management
 
 ### For Recruiters
 - Post and manage job listings
 - View and manage applicants
+- Download applicant resumes (PDF)
 - Accept/reject applications with automated notifications
 - Bulk rejection with one click
-- AI-powered candidate matching (community chatbot)
+- AI-powered candidate matching
 - Individual candidate analysis chatbot
-- Interview scheduling
 
-## Tech Stack
+## 🛠️ Tech Stack
 
 - **Framework**: Next.js 15 (App Router)
-- **Database**: JSON file storage (development/simulation)
-- **Authentication**: JWT with auto-generated secret
+- **Database**: PostgreSQL via Supabase
+- **Authentication**: Supabase Auth (JWT-based)
+- **File Storage**: Supabase Storage (PDF resumes)
 - **Styling**: Tailwind CSS v4 + shadcn/ui
 - **AI**: Mock implementations (ready for OpenAI integration)
-- **Email**: Disabled (console logging only)
+- **Type Safety**: TypeScript with strict mode
 
-## Getting Started
+## 🚀 Getting Started
+
+### Prerequisites
+
+- Node.js 18+ (Node.js 20+ recommended)
+- npm package manager
+- Supabase project (already configured)
 
 ### Installation
 
-1. Clone the repository
-2. Install dependencies:
-   \`\`\`bash
+1. **Clone the repository**
+   ```bash
+   git clone <repository-url>
+   cd frontend
+   ```
+
+2. **Install dependencies**
+   ```bash
    npm install
-   \`\`\`
+   ```
 
-3. Run the development server:
-   \`\`\`bash
+3. **Configure environment variables**
+   
+   Create a `.env.local` file in the root directory:
+   ```env
+   # Supabase Configuration
+   NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+   NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key-here
+   SUPABASE_SERVICE_ROLE_KEY=your-service-role-key-here
+   
+   # Application URL
+   NEXT_PUBLIC_APP_URL=http://localhost:3000
+   ```
+   
+   > **Note**: Change `NEXT_PUBLIC_APP_URL` to your production URL when deploying
+
+4. **Run the development server**
+   ```bash
    npm run dev
-   \`\`\`
+   ```
 
-4. Open [http://localhost:3000](http://localhost:3000)
+5. **Open the application**
+   
+   Visit [http://localhost:3000](http://localhost:3000)
 
-### Database Setup
+## � Project Structure
 
-The JSON file storage is automatically initialized on first run. Sample data is pre-seeded for testing:
+```
+├── app/
+│   ├── api/                    # API routes
+│   │   ├── ai/                 # AI-powered features
+│   │   ├── applications/       # Application management
+│   │   ├── auth/               # Authentication endpoints
+│   │   ├── jobs/               # Job management
+│   │   ├── recruiter/          # Recruiter-specific endpoints
+│   │   └── simple-login/       # Simple login endpoint
+│   ├── login/                  # Login page
+│   ├── recruiter/              # Recruiter dashboard pages
+│   │   ├── applicants/         # All applicants view
+│   │   ├── dashboard/          # Recruiter dashboard
+│   │   ├── jobs/               # Job-specific pages
+│   │   ├── login/              # Recruiter login
+│   │   ├── post-job/           # Job posting page
+│   │   └── profile/            # Recruiter profile
+│   ├── signup/                 # Signup page
+│   └── student/                # Student dashboard pages
+│       ├── applications/       # Application tracking
+│       ├── cover-letters/      # Cover letter generation
+│       ├── dashboard/          # Student dashboard
+│       ├── login/              # Student login
+│       └── profile/            # Student profile
+├── components/                 # React components
+│   ├── recruiter-sidebar.tsx   # Recruiter navigation
+│   ├── student-sidebar.tsx     # Student navigation
+│   ├── theme-provider.tsx      # Theme provider
+│   └── ui/                     # shadcn/ui components
+├── data/                       # Static data files
+│   ├── applications.json
+│   ├── jobs.json
+│   └── users.json
+├── hooks/                      # Custom React hooks
+│   ├── use-mobile.ts
+│   └── use-toast.ts
+├── lib/                        # Business logic and utilities
+│   ├── ai-service.ts           # AI mock implementations
+│   ├── auth.ts                 # Authentication utilities
+│   ├── config.ts               # App configuration
+│   ├── db.ts                   # Database utilities
+│   ├── email-service.ts        # Email service
+│   ├── models/                 # Data models
+│   ├── services/               # Business logic services
+│   │   ├── applications.service.ts
+│   │   ├── auth.service.ts
+│   │   ├── jobs.service.ts
+│   │   └── storage.service.ts
+│   ├── supabase/               # Supabase client utilities
+│   ├── types/                  # TypeScript definitions
+│   └── utils.ts                # Utility functions
+├── public/                     # Static assets
+│   ├── mock-cover-letters/     # Mock cover letter templates
+│   └── placeholder-*.png/svg   # Placeholder images
+└── styles/
+    └── globals.css             # Global styles
+```
 
-**Test Accounts:**
-- Student: `student@test.com` / `password123`
-- Recruiter: `recruiter@test.com` / `password123`
+## 🔐 Configuration
 
-All data is stored in the `/data` directory as JSON files:
-- `users.json` - User accounts
-- `jobs.json` - Job postings
-- `applications.json` - Job applications
+### Environment Variables
 
-### AI Integration (Future)
+All configuration is centralized in `lib/config.ts`. To switch between development and production:
+
+1. **Development**: Uses `http://localhost:3000`
+2. **Production**: Update `NEXT_PUBLIC_APP_URL` in `.env.local`
+
+The config file automatically handles:
+- Supabase connection
+- API endpoints
+- Storage settings
+- Authentication redirects
+
+### Changing URLs
+
+Update `NEXT_PUBLIC_APP_URL` in your `.env.local`:
+```env
+# Development
+NEXT_PUBLIC_APP_URL=http://localhost:3000
+
+# Production
+NEXT_PUBLIC_APP_URL=https://your-domain.com
+```
+
+All URLs throughout the app will automatically use the configured value.
+
+## 🧪 Testing
+
+### Create Test Accounts
+
+1. **Student Account**
+   - Go to `/signup`
+   - Email: `student@test.com`
+   - Password: `password123`
+   - Role: Student
+   - Add skills (e.g., "React, TypeScript, Node.js")
+
+2. **Recruiter Account**
+   - Go to `/signup`
+   - Email: `recruiter@test.com`
+   - Password: `password123`
+   - Role: Recruiter
+
+### Test Workflows
+
+**Student Flow:**
+1. Login as student
+2. Browse jobs on dashboard
+3. Apply to a job with PDF resume
+4. Write/generate cover letter
+5. Track application status
+
+**Recruiter Flow:**
+1. Login as recruiter
+2. Post a new job
+3. View applicants
+4. Download resumes
+5. Accept/reject applications
+
+## 🔒 Security Features
+
+- **Row Level Security (RLS)**: Database-level access control
+- **JWT Authentication**: Secure session management
+- **Private File Storage**: Resumes accessible only to authorized users
+- **CSRF Protection**: Built into Next.js
+- **Environment Variables**: Sensitive keys never exposed to client
+
+## 🚢 Deployment
+
+### Vercel (Recommended)
+
+1. Push code to GitHub
+2. Import project in [Vercel](https://vercel.com)
+3. Add environment variables:
+   - `NEXT_PUBLIC_SUPABASE_URL`
+   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+   - `SUPABASE_SERVICE_ROLE_KEY`
+   - `NEXT_PUBLIC_APP_URL` (your production URL)
+4. Deploy
+
+### Other Platforms
+
+The app works on any platform supporting Next.js:
+- Netlify
+- AWS Amplify
+- Railway
+- Render
+
+## 🤖 AI Integration (Future)
 
 Currently using mock implementations. To integrate real AI:
 
-1. Add OpenAI API key to environment variables
-2. Update `lib/ai-service.ts` to use OpenAI SDK:
+1. Install OpenAI SDK:
+   ```bash
+   npm install openai
+   ```
+
+2. Add API key to `.env.local`:
+   ```env
+   OPENAI_API_KEY=your-api-key
+   ```
+
+3. Update `lib/ai-service.ts`:
    - Cover letter generation: GPT-4
    - Chatbot: GPT-4 with conversation history
    - Candidate matching: Embeddings + vector similarity
 
-## Project Structure
+## 🐛 Troubleshooting
 
-\`\`\`
-├── app/
-│   ├── api/              # API routes
-│   ├── student/          # Student dashboard pages
-│   ├── recruiter/        # Recruiter dashboard pages
-│   └── (auth)/           # Authentication pages
-├── components/           # React components
-├── data/                 # JSON data storage
-│   ├── users.json
-│   ├── jobs.json
-│   └── applications.json
-├── lib/
-│   ├── models/          # Data models
-│   ├── ai-service.ts    # AI mock implementations
-│   ├── email-service.ts # Email service (disabled)
-│   └── auth.ts          # Authentication utilities
-└── scripts/             # Utility scripts
-\`\`\`
+### Build Errors
 
-## Features in Detail
+```bash
+# Clear cache and rebuild
+rm -rf .next node_modules
+npm install
+npm run build
+```
 
-### AI-Powered Cover Letters
-Students can select multiple jobs and generate personalized cover letters using AI. The system considers:
-- Job title and description
-- Job requirements
-- Student skills and hobbies
-- Professional tone and structure
+### Authentication Issues
 
-### Intelligent Candidate Matching
-Recruiters can use the community chatbot to find top candidates based on:
-- Semantic similarity (embeddings)
-- Skills matching
-- Experience relevance
+- Clear browser cookies
+- Check environment variables
+- Verify Supabase project is active
 
-### Automated Notifications
-Email notifications are currently disabled and logged to console. When applications are accepted or rejected, you'll see the notification content in the server logs.
+### File Upload Fails
 
-## Development
+- Ensure file is PDF and under 5MB
+- Check storage bucket exists
+- Verify storage policies are applied
 
-### Adding New Features
-
-1. **Data Models**: Update models in `lib/models/`
-2. **API Routes**: Add routes in `app/api/`
-3. **UI Components**: Create components in `components/`
-4. **Pages**: Add pages in `app/student/` or `app/recruiter/`
-
-### Testing
-
-Test accounts are automatically available:
-- Navigate to `/login`
-- Use test credentials above
-- Explore both student and recruiter workflows
-
-## Deployment
-
-### Vercel (Recommended)
-
-1. Push to GitHub
-2. Import project in Vercel
-3. Deploy
-
-**Note**: JSON file storage is for development only. For production, integrate a real database like PostgreSQL (Neon, Supabase), MongoDB, or MySQL.
-
-## Migration to Production Database
-
-When ready for production, replace the JSON storage with a real database:
-
-1. Choose a database (PostgreSQL, MongoDB, etc.)
-2. Update `lib/db.ts` with database connection
-3. Update models in `lib/models/` to use database queries
-4. Migrate data from JSON files to database
-5. Update API routes if needed
-
-## License
+##  License
 
 MIT
-\`\`\`
 
-```typescriptreact file="lib/init-db.ts" isDeleted="true"
-...deleted...
+## 🤝 Contributing
+
+Contributions welcome! Please read the contributing guidelines before submitting PRs.
+
+## 📞 Support
+
+For issues or questions:
+- Check Supabase dashboard logs
+- Check browser console for client errors
+
+---
+
+Built with ❤️ using Next.js and Supabase

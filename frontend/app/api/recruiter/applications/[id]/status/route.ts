@@ -1,49 +1,53 @@
-import { type NextRequest, NextResponse } from "next/server"
-import { ApplicationModel } from "@/lib/models/application"
-import { JobModel } from "@/lib/models/job"
-import { AuthService } from "@/lib/auth"
-import { UserModel } from "@/lib/models/user"
+import { type NextRequest, NextResponse } from 'next/server'
+import { ApplicationsService } from '@/lib/services/applications.service'
+import { JobsService } from '@/lib/services/jobs.service'
+import { AuthService } from '@/lib/services/auth.service'
 
-export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const currentUser = await AuthService.getCurrentUser()
 
     if (!currentUser) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    if (currentUser.role !== "recruiter") {
-      return NextResponse.json({ error: "Only recruiters can update application status" }, { status: 403 })
+    if (currentUser.role !== 'recruiter') {
+      return NextResponse.json({ error: 'Only recruiters can update application status' }, { status: 403 })
     }
 
-    const { id } = params
+    const { id } = await params
     const body = await request.json()
     const { status } = body
 
-    if (!status || !["pending", "accepted", "rejected"].includes(status)) {
-      return NextResponse.json({ error: "Invalid status" }, { status: 400 })
+    if (!status || !['pending', 'accepted', 'rejected'].includes(status)) {
+      return NextResponse.json({ error: 'Invalid status' }, { status: 400 })
     }
 
-    const application = await ApplicationModel.findById(Number.parseInt(id))
+    const application = await ApplicationsService.getById(id)
 
     if (!application) {
-      return NextResponse.json({ error: "Application not found" }, { status: 404 })
+      return NextResponse.json({ error: 'Application not found' }, { status: 404 })
     }
 
     // Verify the recruiter owns this job
-    const job = await JobModel.findById(application.job_id)
-    if (!job || job.recruiter_id !== currentUser.userId) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+    const job = await JobsService.getById(application.job_id)
+    if (!job || job.recruiter_id !== currentUser.id) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
-    await ApplicationModel.updateStatus(Number.parseInt(id), status)
+    const success = await ApplicationsService.updateStatus(id, status)
 
-    const student = await UserModel.findById(application.student_id)
-    if (student?.email) {
-      if (status === "rejected") {
-        console.log(`Would send rejection email to ${student.email} for ${job.title}`)
-      } else if (status === "accepted") {
-        console.log(`Would send acceptance email to ${student.email} for ${job.title}`)
+    if (!success) {
+      return NextResponse.json({ error: 'Failed to update status' }, { status: 500 })
+    }
+
+    // Get student profile for email notification (optional)
+    const studentProfile = await AuthService.getProfile(application.student_id)
+    if (studentProfile?.email) {
+      if (status === 'rejected') {
+        console.log(`Would send rejection email to ${studentProfile.email} for ${job.title}`)
+      } else if (status === 'accepted') {
+        console.log(`Would send acceptance email to ${studentProfile.email} for ${job.title}`)
       }
     }
 
