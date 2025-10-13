@@ -2,6 +2,7 @@ from huggingface_hub import InferenceClient # this is the inference, there's ano
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from dotenv import load_dotenv
+from services.supabase_client import supabase
 import uvicorn
 import os 
 
@@ -58,6 +59,17 @@ def chat(request: ChatRequest):
     except Exception as e:
         error_msg = str(e)
         raise HTTPException(status_code=500, detail=f"An error occurred: {error_msg}")
+    
 
+@app.get("/profiles", tags=["Supabase Helper"])
+def get_profiles():
+    response = (
+        supabase.table("profiles")
+        .select("*")
+        .execute()
+    )    
+    return response.data
+    
+    
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
