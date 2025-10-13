@@ -134,6 +134,36 @@ export default function ProfilePage() {
         description: "Your resume has been uploaded successfully",
       })
 
+    // Send to Python backend for vectorisation
+    try {
+      const processResponse = await fetch("http://localhost:8000/resume/process", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          student_id: profile.id.toString(),
+        }),
+      })
+
+      if (processResponse.ok) {
+        const processData = await processResponse.json()
+        console.log("Resume vectorised:", processData)
+        toast({
+          title: "Resume processed",
+          description: "Your resume has been analysed and vectorised",
+        })
+      } else {
+        const errorText = await processResponse.text()
+        console.error("Failed to vectorise resume:", errorText)
+        toast({
+          title: "Processing incomplete",
+          description: "Resume uploaded but vectorisation failed",
+          variant: "destructive",
+        })
+      }
+    } catch (vectorError) {
+      console.error("Vectorisation error:", vectorError)
+    }
+
       return data.resumeUrl
     } catch (error) {
       toast({
