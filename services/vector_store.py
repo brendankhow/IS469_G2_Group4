@@ -2,7 +2,6 @@ from services.supabase_client import supabase
 from typing import List, Dict, Optional
 
 class VectorStore:
-    
     @staticmethod
     def store_resume_embedding(
         student_id: str,
@@ -29,7 +28,8 @@ class VectorStore:
         top_k: int = 10,
         threshold: float = 0.0
     ) -> List[Dict]:
-        """Search for similar resumes using the match_resumes function
+        """ 
+            Search for similar resumes using the match_resumes function
             Runs a vector similarity search using cosine similarity - match_resumes is a function defined in supabase
         """
         response = supabase.rpc(

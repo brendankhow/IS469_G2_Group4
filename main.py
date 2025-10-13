@@ -3,6 +3,8 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from dotenv import load_dotenv
 from services.supabase_client import supabase
+from fastapi.middleware.cors import CORSMiddleware
+from routes.resume_routes import router as resume_router
 import uvicorn
 import os 
 
@@ -10,17 +12,23 @@ load_dotenv()
 
 app = FastAPI()
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 HF_API_KEY = os.getenv("HF_API_KEY")
 # api key need to tick the 2 read access under repo and make calls to inference providers
 MODEL_NAME = "deepseek-ai/DeepSeek-V3-0324" # i randomly piak a model, feel free to change and play around 
 client = InferenceClient(token=HF_API_KEY)
 
-
 class ChatRequest(BaseModel):
     message: str = "hi"
     # we can add more hyper parameters here 
     temperature: float = 0.7
-
 
 class ChatResponse(BaseModel):
     response: str
@@ -59,8 +67,10 @@ def chat(request: ChatRequest):
     except Exception as e:
         error_msg = str(e)
         raise HTTPException(status_code=500, detail=f"An error occurred: {error_msg}")
-    
 
+# resume routes
+app.include_router(resume_router, prefix="/resume", tags=["Resume Helper"])
+    
 @app.get("/profiles", tags=["Supabase Helper"])
 def get_profiles():
     response = (
@@ -69,7 +79,6 @@ def get_profiles():
         .execute()
     )    
     return response.data
-    
     
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
