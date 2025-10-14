@@ -59,11 +59,14 @@ export default function ProfilePage() {
     setSaving(true)
     try {
       // First, upload resume if a new one is selected
+      const studentId = profile.id
       let resumeUrl = currentResumeUrl
+      let didUpload = false
       if (resumeFile) {
         const uploadedUrl = await uploadResume()
         if (uploadedUrl) {
           resumeUrl = uploadedUrl
+          didUpload = true
         }
       }
 
@@ -97,8 +100,41 @@ export default function ProfilePage() {
         setCurrentResumeUrl(resumeUrl)
       }
       
-      // Refresh profile data from server
+      // Refresh profile data from server (ensure resume_url is persisted in DB)
       await fetchProfile()
+      
+      // If we just uploaded a resume, trigger backend vectorisation (after resume_url saved)
+      if (didUpload && resumeUrl) {
+        try {
+          const fd = new FormData()
+          fd.append("student_id", studentId.toString())
+
+          const processResponse = await fetch("http://localhost:8000/resume/process", {
+            method: "POST",
+            body: fd,
+          })
+
+          if (processResponse.ok) {
+            const processData = await processResponse.json()
+            console.log("Resume vectorised:", processData)
+            toast({
+              title: "Resume processed",
+              description: "Your resume has been analysed and vectorised",
+            })
+          } else {
+            const contentType = processResponse.headers.get("content-type") || ""
+            const errBody = contentType.includes("application/json") ? await processResponse.json() : await processResponse.text()
+            console.error("Failed to vectorise resume:", errBody)
+            toast({
+              title: "Processing incomplete",
+              description: "Resume uploaded but vectorisation failed",
+              variant: "destructive",
+            })
+          }
+        } catch (vectorError) {
+          console.error("Vectorisation error:", vectorError)
+        }
+      }
     } catch (error) {
       toast({
         title: "Error",
@@ -133,7 +169,6 @@ export default function ProfilePage() {
         title: "✅ Resume uploaded",
         description: "Your resume has been uploaded successfully",
       })
-
       return data.resumeUrl
     } catch (error) {
       toast({
