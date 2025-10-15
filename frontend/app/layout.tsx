@@ -14,6 +14,11 @@ export const metadata: Metadata = {
   title: "HireAI - AI-Powered Hiring Platform",
   description:
     "Connect students and recruiters with AI-driven cover letters, candidate matching, and automated scheduling",
+  icons: {
+    icon: [
+      { url: '/favicon.svg', type: 'image/svg+xml' },
+    ],
+  },
 }
 
 export default function RootLayout({
@@ -23,6 +28,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="dark">
+      <head>
+        <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+      </head>
       <body className={`font-sans ${inter.variable} antialiased`}>
         <Suspense fallback={null}>{children}</Suspense>
         <Analytics />

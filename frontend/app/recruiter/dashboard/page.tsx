@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Loader2, Trash2, Users, Briefcase } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useToast } from "@/hooks/use-toast"
+import { Badge } from "@/components/ui/badge"
 
 interface Job {
   id: number
@@ -15,6 +16,7 @@ interface Job {
   location?: string
   salary_range?: string
   created_at: string
+  applicant_count?: number
 }
 
 export default function RecruiterDashboardPage() {
@@ -107,10 +109,20 @@ export default function RecruiterDashboardPage() {
       ) : (
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
           {jobs.map((job) => (
-            <Card key={job.id} className="hover:border-primary/50">
+            <Card key={job.id} className="hover:border-primary/50 relative">
+              {/* Applicant count badge in top-right corner */}
+              {(job.applicant_count || 0) > 0 && (
+                <Badge 
+                  className="absolute top-4 right-4 bg-primary/10 text-primary border-primary/20 hover:bg-primary/20"
+                  variant="outline"
+                >
+                  <Users className="mr-1 h-3 w-3" />
+                  {job.applicant_count}
+                </Badge>
+              )}
               <CardHeader>
                 <div className="flex items-start justify-between">
-                  <div className="flex-1">
+                  <div className="flex-1 pr-12">
                     <CardTitle className="text-lg">{job.title}</CardTitle>
                     <CardDescription className="mt-1 line-clamp-2">{job.description}</CardDescription>
                   </div>

@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Loader2, Upload, Eye, Trash2 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
+import { PDFViewerModal } from "@/components/pdf-viewer-modal"
 
 interface UserProfile {
   id: number
@@ -30,6 +31,7 @@ export default function ProfilePage() {
   const [uploadingResume, setUploadingResume] = useState(false)
   const [resumeFile, setResumeFile] = useState<File | null>(null)
   const [currentResumeUrl, setCurrentResumeUrl] = useState<string | null>(null)
+  const [pdfViewerOpen, setPdfViewerOpen] = useState(false)
 
   // Check if all mandatory fields are filled
   const isFormValid = () => {
@@ -273,7 +275,7 @@ export default function ProfilePage() {
 
   const handleViewResume = () => {
     if (currentResumeUrl) {
-      window.open(currentResumeUrl, '_blank')
+      setPdfViewerOpen(true)
     }
   }
 
@@ -458,6 +460,14 @@ export default function ProfilePage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* PDF Viewer Modal */}
+      <PDFViewerModal
+        isOpen={pdfViewerOpen}
+        onClose={() => setPdfViewerOpen(false)}
+        pdfUrl={currentResumeUrl || ""}
+        title="My Resume"
+      />
     </div>
   )
 }

@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Loader2, Mail, Phone, FileText, Sparkles, AlertCircle, Calendar, Download, Eye, Send, Bot, User } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
+import { PDFViewerWithChatModal } from "@/components/pdf-viewer-with-chat-modal"
 
 interface Applicant {
   id: number
@@ -57,6 +58,11 @@ export default function ApplicantsPage() {
   // AI Matching state
   const [loadingAIMatching, setLoadingAIMatching] = useState(false)
   const [aiMatchingResults, setAiMatchingResults] = useState<string | null>(null)
+  
+  // PDF Viewer state
+  const [pdfViewerOpen, setPdfViewerOpen] = useState(false)
+  const [selectedResumeUrl, setSelectedResumeUrl] = useState<string | null>(null)
+  const [selectedCandidateForResume, setSelectedCandidateForResume] = useState<Applicant | null>(null)
 
   useEffect(() => {
     fetchApplicants()
@@ -79,14 +85,20 @@ export default function ApplicantsPage() {
   }
 
   const handleOpenChat = (applicant: Applicant) => {
-    setSelectedCandidateForChat(applicant)
-    setChatMessages([
-      {
-        role: "assistant",
-        content: `Hi! I'm here to help you learn more about ${applicant.student_name || "this candidate"}. You can ask me about their skills, experience, or how well they match this position.`,
-        timestamp: new Date()
-      }
-    ])
+    // Check if we already have chat history for this candidate
+    const isSameCandidate = selectedCandidateForChat?.id === applicant.id
+    
+    if (!isSameCandidate) {
+      setSelectedCandidateForChat(applicant)
+      setChatMessages([
+        {
+          role: "assistant",
+          content: `Hi! I'm here to help you learn more about ${applicant.student_name || "this candidate"}. You can ask me about their skills, experience, or how well they match this position.`,
+          timestamp: new Date()
+        }
+      ])
+    }
+    
     setChatOpen(true)
   }
 
@@ -129,36 +141,42 @@ export default function ApplicantsPage() {
     setAiMatchingResults(null)
     
     try {
-      // Fetch all recruiter's jobs
-      const response = await fetch("/api/recruiter/jobs")
-      const data = await response.json()
-      const jobs: Job[] = data.jobs || []
-      
       // Simulate processing delay
       await new Promise(resolve => setTimeout(resolve, 2000))
       
-      // Generate mock summary for each job
-      let summary = ""
-      jobs.forEach((job, index) => {
-        const candidateCount = Math.floor(Math.random() * 8) + 2
-        const matchRange = `${Math.floor(Math.random() * 10 + 75)}-${Math.floor(Math.random() * 5 + 90)}`
-        const mockSkills = [
-          ["React", "TypeScript", "Node.js"],
-          ["Python", "FastAPI", "PostgreSQL"],
-          ["Java", "Spring Boot", "AWS"],
-          ["Vue.js", "GraphQL", "MongoDB"],
-          ["Angular", "C#", ".NET Core"]
-        ]
-        const skills = mockSkills[Math.floor(Math.random() * mockSkills.length)]
-        
-        summary += `**Job ${index + 1}: ${job.title}**\n`
-        summary += `• ${candidateCount} candidates matching (${matchRange}% match)\n`
-        summary += `• Top skills: ${skills.join(", ")}\n\n`
+      // Generate mock summary for current job's applicants
+      const candidateCount = applicants.length
+      const pendingCandidates = applicants.filter(app => app.status === "pending").length
+      
+      if (candidateCount === 0) {
+        setAiMatchingResults("No applicants yet. Check back once candidates start applying!")
+        return
+      }
+      
+      // Generate mock candidate list with match percentages
+      const mockCandidateResults = applicants.map(applicant => {
+        const matchPercentage = Math.floor(Math.random() * 15 + 80) // 80-95%
+        const skills = applicant.student_skills?.split(',').slice(0, 3) || []
+        return {
+          name: applicant.student_name || "Anonymous",
+          match: matchPercentage,
+          skills: skills,
+          status: applicant.status
+        }
       })
       
-      if (jobs.length === 0) {
-        summary = "No jobs posted yet. Post a job to see AI-powered candidate matching!"
-      }
+      // Sort by match percentage descending
+      mockCandidateResults.sort((a, b) => b.match - a.match)
+      
+      let summary = `**Candidate Analysis** (${candidateCount} total, ${pendingCandidates} pending)\n\n`
+      
+      mockCandidateResults.forEach((result, index) => {
+        summary += `**${index + 1}. ${result.name}** - ${result.match}% match\n`
+        if (result.skills.length > 0) {
+          summary += `• Skills: ${result.skills.join(", ")}\n`
+        }
+        summary += `• Status: ${result.status.charAt(0).toUpperCase() + result.status.slice(1)}\n\n`
+      })
       
       setAiMatchingResults(summary)
     } catch (error) {
@@ -246,9 +264,25 @@ export default function ApplicantsPage() {
     }
   }
 
-  const handleViewResume = (resumeUrl: string) => {
+  const handleViewResume = (resumeUrl: string, applicant: Applicant) => {
     if (resumeUrl) {
-      window.open(resumeUrl, '_blank')
+      setSelectedResumeUrl(resumeUrl)
+      setSelectedCandidateForResume(applicant)
+      
+      // Initialize chat for this candidate if not already present
+      const existingChat = chatMessages.length > 0 && selectedCandidateForChat?.id === applicant.id
+      if (!existingChat) {
+        setChatMessages([
+          {
+            role: "assistant",
+            content: `Hi! I'm here to help you learn more about ${applicant.student_name || "this candidate"}. You can ask me about their skills, experience, or how well they match this position.`,
+            timestamp: new Date()
+          }
+        ])
+        setSelectedCandidateForChat(applicant)
+      }
+      
+      setPdfViewerOpen(true)
     } else {
       toast({
         title: "Resume not available",
@@ -308,13 +342,13 @@ export default function ApplicantsPage() {
               <Sparkles className="h-5 w-5 text-primary" />
               AI Candidate Matching Summary
             </CardTitle>
-            <CardDescription>AI-powered matching analysis for all your posted jobs</CardDescription>
+            <CardDescription>AI-powered matching analysis for this job's candidates</CardDescription>
           </CardHeader>
           <CardContent>
             {loadingAIMatching ? (
               <div className="flex items-center justify-center py-8">
                 <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                <span className="ml-3 text-muted-foreground">Analyzing candidates across all jobs...</span>
+                <span className="ml-3 text-muted-foreground">Analyzing candidates for this job...</span>
               </div>
             ) : (
               <div className="space-y-3">
@@ -394,7 +428,7 @@ export default function ApplicantsPage() {
                     <Button 
                       variant="outline" 
                       size="sm" 
-                      onClick={() => handleViewResume(applicant.resume_url!)}
+                      onClick={() => handleViewResume(applicant.resume_url!, applicant)}
                     >
                       <Eye className="mr-2 h-4 w-4" />
                       View Resume
@@ -549,6 +583,47 @@ export default function ApplicantsPage() {
           </div>
         </SheetContent>
       </Sheet>
+
+      {/* PDF Viewer with Chat Modal */}
+      {selectedCandidateForResume && (
+        <PDFViewerWithChatModal
+          isOpen={pdfViewerOpen}
+          onClose={() => setPdfViewerOpen(false)}
+          pdfUrl={selectedResumeUrl || ""}
+          candidate={selectedCandidateForResume}
+          chatMessages={chatMessages}
+          onSendMessage={async (message: string) => {
+            const userMessage: ChatMessage = {
+              role: "user",
+              content: message,
+              timestamp: new Date()
+            }
+            
+            setChatMessages(prev => [...prev, userMessage])
+            setSendingMessage(true)
+            
+            // Mock AI response with delay
+            setTimeout(() => {
+              const mockResponses = [
+                `Based on ${selectedCandidateForResume.student_name}'s profile, they have strong skills in ${selectedCandidateForResume.student_skills || "various technical areas"}. Their experience aligns well with the job requirements.`,
+                `${selectedCandidateForResume.student_name} demonstrates a ${Math.floor(Math.random() * 15 + 80)}% match with this position. Their background in ${selectedCandidateForResume.student_skills?.split(',')[0] || "the field"} is particularly relevant.`,
+                `I'd recommend scheduling an interview with ${selectedCandidateForResume.student_name}. They show promise in areas that are critical for this role.`,
+                `${selectedCandidateForResume.student_name} has applied with enthusiasm. Their skills include ${selectedCandidateForResume.student_skills || "relevant competencies"}, which could be valuable for your team.`
+              ]
+              
+              const aiMessage: ChatMessage = {
+                role: "assistant",
+                content: mockResponses[Math.floor(Math.random() * mockResponses.length)],
+                timestamp: new Date()
+              }
+              
+              setChatMessages(prev => [...prev, aiMessage])
+              setSendingMessage(false)
+            }, 1000)
+          }}
+          sendingMessage={sendingMessage}
+        />
+      )}
     </div>
   )
 }

@@ -42,14 +42,18 @@ export const JobsService = {
   },
 
   /**
-   * Get jobs by recruiter ID
+   * Get jobs by recruiter ID with applicant counts
    */
   getByRecruiterId: async (recruiterId: string): Promise<Job[]> => {
     const supabase = await createClient()
     
+    // Get jobs with applicant counts
     const { data, error } = await supabase
       .from('jobs')
-      .select('*')
+      .select(`
+        *,
+        applications:applications(count)
+      `)
       .eq('recruiter_id', recruiterId)
       .order('created_at', { ascending: false })
 
@@ -58,7 +62,14 @@ export const JobsService = {
       return []
     }
 
-    return data || []
+    // Transform the data to include applicant_count
+    const jobsWithCounts = (data || []).map((job: any) => ({
+      ...job,
+      applicant_count: job.applications?.[0]?.count || 0,
+      applications: undefined, // Remove the applications object from response
+    }))
+
+    return jobsWithCounts
   },
 
   /**
