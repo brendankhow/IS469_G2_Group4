@@ -18,6 +18,8 @@ interface UserProfile {
   phone?: string
   hobbies?: string
   skills?: string
+  github_username?: string
+  tiktok_handle?: string
 }
 
 export default function ProfilePage() {
@@ -28,6 +30,18 @@ export default function ProfilePage() {
   const [uploadingResume, setUploadingResume] = useState(false)
   const [resumeFile, setResumeFile] = useState<File | null>(null)
   const [currentResumeUrl, setCurrentResumeUrl] = useState<string | null>(null)
+
+  // Check if all mandatory fields are filled
+  const isFormValid = () => {
+    if (!profile) return false
+    return !!(
+      profile.name?.trim() &&
+      profile.phone?.trim() &&
+      profile.skills?.trim() &&
+      profile.hobbies?.trim() &&
+      currentResumeUrl
+    )
+  }
 
   useEffect(() => {
     fetchProfile()
@@ -56,6 +70,25 @@ export default function ProfilePage() {
   const handleSave = async () => {
     if (!profile) return
     
+    // Validate @ symbol in github_username and tiktok_handle
+    if (profile.github_username && profile.github_username.includes('@')) {
+      toast({
+        title: "Invalid GitHub Username",
+        description: "Please enter your GitHub username without the @ symbol",
+        variant: "destructive",
+      })
+      return
+    }
+    
+    if (profile.tiktok_handle && profile.tiktok_handle.includes('@')) {
+      toast({
+        title: "Invalid TikTok Handle",
+        description: "Please enter your TikTok handle without the @ symbol",
+        variant: "destructive",
+      })
+      return
+    }
+    
     setSaving(true)
     try {
       // First, upload resume if a new one is selected
@@ -79,6 +112,8 @@ export default function ProfilePage() {
           phone: profile.phone,
           skills: profile.skills,
           hobbies: profile.hobbies,
+          github_username: profile.github_username,
+          tiktok_handle: profile.tiktok_handle,
           resume_url: resumeUrl,
         }),
       })
@@ -323,7 +358,27 @@ export default function ProfilePage() {
                 className="bg-secondary/50"
               />
             </div>
-            <Button onClick={handleSave} disabled={saving} className="w-full">
+            <div className="space-y-2">
+              <Label htmlFor="github_username">GitHub Username (Optional)</Label>
+              <Input
+                id="github_username"
+                value={profile?.github_username || ""}
+                onChange={(e) => setProfile({ ...profile!, github_username: e.target.value })}
+                placeholder="without the @"
+                className="bg-secondary/50"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="tiktok_handle">TikTok Handle (Optional)</Label>
+              <Input
+                id="tiktok_handle"
+                value={profile?.tiktok_handle || ""}
+                onChange={(e) => setProfile({ ...profile!, tiktok_handle: e.target.value })}
+                placeholder="without the @"
+                className="bg-secondary/50"
+              />
+            </div>
+            <Button onClick={handleSave} disabled={saving || !isFormValid()} className="w-full">
               {saving ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />

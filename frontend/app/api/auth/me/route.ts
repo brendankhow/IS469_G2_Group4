@@ -31,7 +31,15 @@ export async function PATCH(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { name, phone, skills, hobbies, resume_url } = body
+    let { name, phone, skills, hobbies, resume_url, github_username, tiktok_handle } = body
+
+    // Strip '@' symbol if present in github_username or tiktok_handle
+    if (github_username && github_username.includes('@')) {
+      github_username = github_username.replace(/@/g, '')
+    }
+    if (tiktok_handle && tiktok_handle.includes('@')) {
+      tiktok_handle = tiktok_handle.replace(/@/g, '')
+    }
 
     const updates = {
       name,
@@ -39,6 +47,8 @@ export async function PATCH(request: NextRequest) {
       skills,
       hobbies,
       resume_url,
+      github_username,
+      tiktok_handle,
     }
 
     const updatedProfile = await AuthService.updateProfile(currentUser.id, updates)
