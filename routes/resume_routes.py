@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, Form
 from services.resume_parser import ResumeParser
-from services.embedding_service import EmbeddingService
+from services.embedder import embedder
 from services.vector_store import VectorStore
 from services.supabase_client import supabase
 import tempfile
@@ -10,7 +10,6 @@ import requests
 router = APIRouter()
 
 parser = ResumeParser()
-embedder = EmbeddingService()
 
 @router.post("/process")
 async def process_resume(student_id: str = Form(...)):

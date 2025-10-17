@@ -3,7 +3,7 @@ from pydantic import BaseModel
 from typing import List, Dict
 from dotenv import load_dotenv
 from huggingface_hub import InferenceClient
-from services.embedding_service import EmbeddingService
+from services.embedder import embedder
 from services.vector_store import VectorStore
 from services.supabase_client import supabase
 import os
@@ -11,7 +11,6 @@ import os
 load_dotenv()
 
 router = APIRouter()
-embedder = EmbeddingService()
 
 HF_API_KEY = os.getenv("HF_API_KEY")
 # api key need to tick the 2 read access under repo and make calls to inference providers
