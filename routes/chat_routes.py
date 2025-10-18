@@ -104,3 +104,50 @@ def chat(request: ChatRequest):
     except Exception as e:
         error_msg = str(e)
         raise HTTPException(status_code=500, detail=f"An error occurred: {error_msg}")
+
+class ChatHistoryRequest(BaseModel):
+    messages: List[Dict[str, str]]  # Each dict: {"role": "user"/"assistant", "content": "..."}
+    temperature: float = 0.7 
+
+@router.post("/chat_with_history", response_model=ChatResponse)
+def chat_with_history(request: ChatHistoryRequest) -> str:
+    """
+    LLM call with conversation history (for multi-turn chats).
+    
+    Args:
+        messages: List of {"role": "user"/"assistant", "content": "..."} dicts
+        system_prompt: System context
+        temperature: Creativity level
+        model: LLM model to use
+    
+    Returns:
+        str: The LLM's response text
+    
+    Example usage:
+        {
+        "messages": [
+            { "role": "user", "content": "Tell me about candidate A. A has 3 years experience in python and some frontend skills on javascript but prefers to use typescript." },
+            { "role": "assistant", "content": "Candidate A has experience in Python." },
+            { "role": "user", "content": "What about their JavaScript skills?" },
+            { "role": "user", "content": "What is the candidate name again?" }
+        ],
+        "temperature": 0.7
+        }
+    """
+    try:
+        completion = client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=[
+                {
+                    "role": "system",
+                    "content": "You are a helpful assistant."
+                },
+                *request.messages  # unpack conversation history
+            ],
+            temperature=request.temperature,
+        )
+        
+        return ChatResponse(response=completion.choices[0].message.content)   
+     
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"LLM error: {str(e)}")
