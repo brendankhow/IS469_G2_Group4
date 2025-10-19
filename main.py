@@ -6,6 +6,7 @@ from services.supabase_client import supabase
 from fastapi.middleware.cors import CORSMiddleware
 from routes.resume_routes import router as resume_router
 from routes.chat_routes import router as chat_router
+from routes.github_routes import router as github_router
 import uvicorn
 import os 
 
@@ -47,6 +48,9 @@ app.include_router(chat_router, prefix="/chat", tags=["Chat Helper"])
 
 # resume routes
 app.include_router(resume_router, prefix="/resume", tags=["Resume Helper"])
+
+# github routes
+app.include_router(github_router, prefix="/github", tags=["GitHub Helper"])
     
 @app.get("/profiles", tags=["Supabase Helper"])
 def get_profiles():
