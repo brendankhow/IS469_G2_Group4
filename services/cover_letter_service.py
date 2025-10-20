@@ -17,18 +17,24 @@ class coverLetterService:
         return feedback
     
     @staticmethod
-    def generate_cover_letter_for_job(job_description: str, relevant_experience_chunks: List[str]) -> str:
+    def generate_cover_letter_for_job(job_description: str, relevant_experience_chunks: List[str], student_profile: Dict) -> str:
         """
         Generates a tailored cover letter using a JD and relevant resume snippets.
         """
         print("LLM Service: Generating cover letter...")
 
         context = "\n- ".join(relevant_experience_chunks)
+        student_name = student_profile.get("name", "[Your Name]")
         
-        system_prompt = """
+        system_prompt = f"""
         You are a professional career writer crafting a compelling, concise, and professional cover letter for a student. 
-        You MUST seamlessly weave the candidate's most relevant experiences into a narrative. 
-        Do not just list their skills; connect them to the job's requirements and tell a story.
+        Your task is to generate ONLY the body of the cover letter.
+        - Do NOT include student's address, date, or the hiring manager's address).
+        - Start the letter directly with "Dear Hiring Manager,".
+        - End the letter with "Best regards," followed by the student's name.
+        - The student's name is {student_name}.
+        - You MUST seamlessly weave the candidate's most relevant experiences into a narrative. 
+        - Do not just list their skills; connect them to the job's requirements and tell a story.
         """
         
         user_prompt = f"""

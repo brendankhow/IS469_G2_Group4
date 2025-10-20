@@ -56,67 +56,74 @@ function CoverLettersContent() {
 
 
   const fetchJobsAndGenerateCoverLetters = async (jobIds: string[]) => {
-    try {
-      console.log('🔵 Fetching jobs for IDs:', jobIds)
-      
-      // Fetch student profile first
-      const profileResponse = await fetch("/api/auth/me")
-      const profileData = await profileResponse.json()
-      setStudentProfile(profileData.user)
+      try {
+          // --- This part stays the same: get student profile and job details ---
+          const profileResponse = await fetch("/api/auth/me");
+          const profileData = await profileResponse.json();
+          const studentId = profileData.user?.id;
 
-      // Check if student has completed their profile
-      const isProfileComplete = !!(
-        profileData.user?.resume_url &&
-        profileData.user?.name?.trim() &&
-        profileData.user?.phone?.trim() &&
-        profileData.user?.skills?.trim() &&
-        profileData.user?.hobbies?.trim()
-      )
-      
-      if (!isProfileComplete) {
-        toast({
-          title: "⚠️ Complete Your Profile",
-          description: "Please complete all required fields in your profile before applying to jobs",
-          variant: "destructive",
-        })
-        router.push("/student/profile")
-        return
+          if (!studentId) {
+              throw new Error("Could not find student ID.");
+          }
+
+          const jobsResponse = await fetch("/api/jobs");
+          const jobsData = await jobsResponse.json();
+          const selectedJobsDetails = jobsData.jobs.filter((job: Job) => jobIds.includes(job.id));
+          setJobs(selectedJobsDetails);
+
+          // --- This is the key change: One API call to the backend ---
+
+          // 1. Set up the initial "loading" state for all cards
+          const initialCoverLetters = selectedJobsDetails.map((job: Job) => ({
+              jobId: job.id,
+              content: "",
+              isGenerating: true,
+          }));
+          setCoverLetters(initialCoverLetters);
+
+          // 2. Prepare the payload for your real backend
+          const payload = {
+              student_id: studentId,
+              job_ids: jobIds,
+          };
+
+          // 3. Make the single, powerful API call
+          const generationResponse = await fetch(`http://127.0.0.1:8000/student/generate-cover-letters`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(payload),
+          });
+
+          if (!generationResponse.ok) {
+              throw new Error(`Server responded with status: ${generationResponse.status}`);
+          }
+
+          const result = await generationResponse.json();
+
+          // 4. Update the UI with the real, AI-generated cover letters
+          const finalCoverLetters = selectedJobsDetails.map((job: Job) => {
+              const generated = result.cover_letters.find((cl: any) => cl.job_id === job.id);
+              return {
+                  jobId: job.id,
+                  content: generated ? generated.cover_letter : "Error: Could not generate.",
+                  isGenerating: false, // Generation is complete
+              };
+          });
+          setCoverLetters(finalCoverLetters);
+          
+      } catch (error) {
+          console.error('🔴 Error in fetchJobsAndGenerateCoverLetters:', error);
+          toast({
+              title: "Error",
+              description: "Failed to generate cover letters.",
+              variant: "destructive",
+          });
+          // Also update UI to show error state
+          setCoverLetters(prev => prev.map(cl => ({...cl, isGenerating: false, content: "Generation failed."})))
+      } finally {
+          setLoading(false);
       }
-
-      const response = await fetch("/api/jobs")
-      const data = await response.json()
-      console.log('🔵 All jobs fetched:', data.jobs.length)
-      
-      const selectedJobs = data.jobs.filter((job: Job) => jobIds.includes(job.id))
-      console.log('🔵 Selected jobs:', selectedJobs.length, selectedJobs.map((j: Job) => j.title))
-      setJobs(selectedJobs)
-
-      // Initialize cover letters
-      const initialCoverLetters = selectedJobs.map((job: Job) => ({
-        jobId: job.id,
-        content: "",
-        isGenerating: true,
-      }))
-      console.log('🔵 Initialized cover letters:', initialCoverLetters.length)
-      setCoverLetters(initialCoverLetters)
-
-      // Generate cover letters one by one
-      for (const job of selectedJobs) {
-        await generateCoverLetter(job)
-      }
-      
-      console.log('✅ All cover letters generated')
-    } catch (error) {
-      console.error('🔴 Error in fetchJobsAndGenerateCoverLetters:', error)
-      toast({
-        title: "Error",
-        description: "Failed to load jobs",
-        variant: "destructive",
-      })
-    } finally {
-      setLoading(false)
-    }
-  }
+  };
 
   const generateCoverLetter = async (job: Job) => {
     try {
