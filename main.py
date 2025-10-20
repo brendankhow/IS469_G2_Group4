@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from routes.resume_routes import router as resume_router
 from routes.chat_routes import router as chat_router
 from routes.github_routes import router as github_router
+from routes.student_routes import router as student_router
 import uvicorn
 import os 
 
@@ -51,6 +52,7 @@ app.include_router(resume_router, prefix="/resume", tags=["Resume Helper"])
 
 # github routes
 app.include_router(github_router, prefix="/github", tags=["GitHub Helper"])
+app.include_router(student_router, prefix="/student", tags=["Student Helper"])
     
 @app.get("/profiles", tags=["Supabase Helper"])
 def get_profiles():

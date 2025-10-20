@@ -1,8 +1,11 @@
 from fastapi import APIRouter, HTTPException, Form
+from typing import List
+from pydantic import BaseModel
 from services.resume_parser import ResumeParser
 from services.embedder import embedder
 from services.vector_store import VectorStore
 from services.supabase_client import supabase
+from services.cover_letter_service import coverLetterService
 import tempfile
 import os
 import requests
