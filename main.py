@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 from services.supabase_client import supabase
 from fastapi.middleware.cors import CORSMiddleware
 from routes.resume_routes import router as resume_router
+from routes.student_routes import router as student_router
 import uvicorn
 import os 
 
@@ -70,6 +71,7 @@ def chat(request: ChatRequest):
 
 # resume routes
 app.include_router(resume_router, prefix="/resume", tags=["Resume Helper"])
+app.include_router(student_router, prefix="/student", tags=["Student Helper"])
     
 @app.get("/profiles", tags=["Supabase Helper"])
 def get_profiles():

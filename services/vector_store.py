@@ -74,3 +74,27 @@ class VectorStore:
             .eq("student_id", student_id)\
             .execute()
         return response.data[0]
+    
+    @staticmethod
+    def search_student_resume(
+        student_id: str,
+        query_embedding: List[float],
+        top_k: int = 5,
+        threshold: float = 0.7
+    ) -> List[Dict]:
+        """
+        Performs a semantic search for the most relevant chunks
+        within a SINGLE student's resume.
+        """
+        response = supabase.rpc(
+            "match_resumes",
+            {
+                "query_embedding": query_embedding,
+                "match_count": top_k,
+                "match_threshold": threshold
+            }
+        ).eq(
+            "student_id", student_id 
+        ).execute()
+        
+        return response.data
