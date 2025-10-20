@@ -9,6 +9,7 @@ from services.cover_letter_service import coverLetterService
 import tempfile
 import os
 import requests
+import traceback
 
 router = APIRouter()
 
@@ -21,7 +22,10 @@ class JobIDs(BaseModel):
 class CoverLetterRequest(BaseModel):
     student_id: str
     job_ids: List[str]
-    
+
+class RefinementRequest(BaseModel):
+    original_letter: str
+    instruction: str    
 
 @router.post("/feedback")
 async def get_resume_feedback(student_id: str = Form(...)):
@@ -55,7 +59,6 @@ async def generate_cover_letters_package(payload: CoverLetterRequest):
 
         for job in jobs:
             jd_text = job.get("description")
-            print(jd_text)
             if not jd_text:
                 continue
             
@@ -89,3 +92,17 @@ async def generate_cover_letters_package(payload: CoverLetterRequest):
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+    
+@router.post("/refine-cover-letter")
+async def refine_cover_letter_endpoint(payload: RefinementRequest):
+    try:
+        refined_text = coverLetterService.refine_cover_letter(
+            original_letter=payload.original_letter,
+            user_instruction=payload.instruction
+        )
+        return {"refined_letter": refined_text}
+    except Exception as e:
+        print("--- AN UNEXPECTED ERROR OCCURRED in refine-cover-letter ---")
+        traceback.print_exc()
+        print("-------------------------------------------------------")
+        raise HTTPException(status_code=500, detail=f"An internal error occurred: {str(e)}")

@@ -70,3 +70,32 @@ class coverLetterService:
         except Exception as e:
             print(f"Error fetching job postings: {e}")
             return []
+        
+    @staticmethod
+    def refine_cover_letter(original_letter: str, user_instruction: str) -> str:
+        """
+        Refines cover letter.
+        """
+        print("LLM Service: Refining cover letter...")
+        
+        system_prompt = """
+        You are an AI writing assistant. Your task is to rewrite and improve an existing cover letter based on the user's specific instruction.
+        - You MUST return ONLY the full, rewritten cover letter body.
+        - Do NOT add headers, addresses, or any text other than the refined letter.
+        - Adhere strictly to the user's instruction (e.g., 'make it more formal,' 'shorten it,' 'focus more on my Python skills').
+        """
+        
+        user_prompt = f"""
+        <OriginalCoverLetter>
+        {original_letter}
+        </OriginalCoverLetter>
+
+        <UserInstruction>
+        {user_instruction}
+        </UserInstruction>
+
+        Now, please provide the complete, rewritten cover letter body based on the instruction.
+        """
+
+        refined_letter = llm_client.generate_text(system_prompt, user_prompt)
+        return refined_letter

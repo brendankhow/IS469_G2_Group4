@@ -33,6 +33,8 @@ function CoverLettersContent() {
   const [submitting, setSubmitting] = useState(false)
   const [showChatbot, setShowChatbot] = useState<string | null>(null)
   const [studentProfile, setStudentProfile] = useState<any>(null)
+  const [refinementInput, setRefinementInput] = useState("");
+  const [isRefining, setIsRefining] = useState<string | null>(null);
 
   useEffect(() => {
     const jobIds = searchParams.get("jobs")?.split(",") || []
@@ -132,6 +134,42 @@ function CoverLettersContent() {
       setCoverLetters(prev => prev.map(cl => ({...cl, isGenerating: false, content: "Generation failed."})));
     }
   }
+
+  const handleRefine = async (jobId: string, originalContent: string) => {
+      if (!refinementInput.trim()) {
+          toast({ title: "Instruction is empty", variant: "destructive" });
+          return;
+      }
+
+      setIsRefining(jobId); // Start loading for this specific card
+      try {
+          const payload = {
+              original_letter: originalContent,
+              instruction: refinementInput,
+          };
+
+          const response = await fetch(`http://127.0.0.1:8000/student/refine-cover-letter`, { // Use your correct prefix
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(payload),
+          });
+
+          if (!response.ok) {
+              throw new Error("Failed to refine the cover letter.");
+          }
+
+          const data = await response.json();
+          
+          // Update the specific cover letter in your state
+          updateCoverLetter(jobId, data.refined_letter);
+          setRefinementInput(""); // Clear the input field
+
+      } catch (error) {
+          toast({ title: "Refinement Failed", variant: "destructive" });
+      } finally {
+          setIsRefining(null); // Stop loading
+      }
+  };
 
 //   const generateCoverLetter = async (job: Job) => {
 //     try {
@@ -361,14 +399,28 @@ function CoverLettersContent() {
                       <Sparkles className="mr-2 h-4 w-4" />
                       Refine with AI
                     </Button>
-
+                    
                     {showChatbot === job.id && (
-                      <div className="rounded-lg border border-primary/50 bg-secondary/30 p-4">
-                        <p className="mb-2 text-sm font-medium">AI Assistant</p>
-                        <p className="text-xs text-muted-foreground">
-                          Mock chatbot interface - In production, this would connect to OpenAI API for real-time
-                          refinements
-                        </p>
+                      <div className="rounded-lg border border-primary/50 bg-secondary/30 p-4 space-y-2">
+                        <p className="text-sm font-medium">AI Assistant</p>
+                        <Textarea
+                          value={refinementInput}
+                          onChange={(e) => setRefinementInput(e.target.value)}
+                          placeholder="e.g., 'Make it more formal' or 'Shorten this to three paragraphs'"
+                          rows={2}
+                        />
+                        <Button 
+                          size="sm" 
+                          onClick={() => handleRefine(job.id, coverLetter?.content || "")}
+                          disabled={isRefining === job.id}
+                        >
+                          {isRefining === job.id ? (
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          ) : (
+                            <Sparkles className="mr-2 h-4 w-4" />
+                          )}
+                          Refine
+                        </Button>
                       </div>
                     )}
                   </>
