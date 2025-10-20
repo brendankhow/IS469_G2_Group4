@@ -5,6 +5,8 @@ from dotenv import load_dotenv
 from services.supabase_client import supabase
 from fastapi.middleware.cors import CORSMiddleware
 from routes.resume_routes import router as resume_router
+from routes.chat_routes import router as chat_router
+from routes.github_routes import router as github_router
 from routes.student_routes import router as student_router
 import uvicorn
 import os 
@@ -42,35 +44,14 @@ def read_root():
         "type": "huggingface_api"
     }
 
-@app.post("/chat", response_model=ChatResponse)
-def chat(request: ChatRequest):
-    try:
-        completion = client.chat.completions.create(
-            model=MODEL_NAME,
-            messages=[
-                {
-                    "role": "system",
-                    "content": "You are a helpful assistant."  # modify this to fit our use case 
-                },
-                {
-                    "role": "user",
-                    "content": request.message
-                }
-            ],
-            # add hyper parameters here
-            temperature=request.temperature
-        )
-        
-        response_text = completion.choices[0].message.content
-        
-        return ChatResponse(response=response_text)
-    
-    except Exception as e:
-        error_msg = str(e)
-        raise HTTPException(status_code=500, detail=f"An error occurred: {error_msg}")
+# chat routes
+app.include_router(chat_router, prefix="/chat", tags=["Chat Helper"])
 
 # resume routes
 app.include_router(resume_router, prefix="/resume", tags=["Resume Helper"])
+
+# github routes
+app.include_router(github_router, prefix="/github", tags=["GitHub Helper"])
 app.include_router(student_router, prefix="/student", tags=["Student Helper"])
     
 @app.get("/profiles", tags=["Supabase Helper"])
