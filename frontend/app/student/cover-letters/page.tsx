@@ -40,8 +40,9 @@ function CoverLettersContent() {
       router.push("/student/dashboard")
       return
     }
-    fetchJobsAndGenerateCoverLetters(jobIds)
+    fetchJobs(jobIds)
   }, [searchParams])
+
 
   useEffect(() => {
     console.log('🔵 Cover letters state updated:', coverLetters.length, 'letters')
@@ -55,161 +56,168 @@ function CoverLettersContent() {
   }, [jobs])
 
 
-  const fetchJobsAndGenerateCoverLetters = async (jobIds: string[]) => {
-      try {
-          // --- This part stays the same: get student profile and job details ---
-          const profileResponse = await fetch("/api/auth/me");
-          const profileData = await profileResponse.json();
-          const studentId = profileData.user?.id;
-
-          if (!studentId) {
-              throw new Error("Could not find student ID.");
-          }
-
-          const jobsResponse = await fetch("/api/jobs");
-          const jobsData = await jobsResponse.json();
-          const selectedJobsDetails = jobsData.jobs.filter((job: Job) => jobIds.includes(job.id));
-          setJobs(selectedJobsDetails);
-
-          // --- This is the key change: One API call to the backend ---
-
-          // 1. Set up the initial "loading" state for all cards
-          const initialCoverLetters = selectedJobsDetails.map((job: Job) => ({
-              jobId: job.id,
-              content: "",
-              isGenerating: true,
-          }));
-          setCoverLetters(initialCoverLetters);
-
-          // 2. Prepare the payload for your real backend
-          const payload = {
-              student_id: studentId,
-              job_ids: jobIds,
-          };
-
-          // 3. Make the single, powerful API call
-          const generationResponse = await fetch(`http://127.0.0.1:8000/student/generate-cover-letters`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(payload),
-          });
-
-          if (!generationResponse.ok) {
-              throw new Error(`Server responded with status: ${generationResponse.status}`);
-          }
-
-          const result = await generationResponse.json();
-
-          // 4. Update the UI with the real, AI-generated cover letters
-          const finalCoverLetters = selectedJobsDetails.map((job: Job) => {
-              const generated = result.cover_letters.find((cl: any) => cl.job_id === job.id);
-              return {
-                  jobId: job.id,
-                  content: generated ? generated.cover_letter : "Error: Could not generate.",
-                  isGenerating: false, // Generation is complete
-              };
-          });
-          setCoverLetters(finalCoverLetters);
-          
-      } catch (error) {
-          console.error('🔴 Error in fetchJobsAndGenerateCoverLetters:', error);
-          toast({
-              title: "Error",
-              description: "Failed to generate cover letters.",
-              variant: "destructive",
-          });
-          // Also update UI to show error state
-          setCoverLetters(prev => prev.map(cl => ({...cl, isGenerating: false, content: "Generation failed."})))
-      } finally {
-          setLoading(false);
-      }
-  };
-
-  const generateCoverLetter = async (job: Job) => {
+  const fetchJobs = async (jobIds: string[]) => {
     try {
-      console.log('🔵 Generating cover letter for job:', job.title)
+      // Fetch profile and job details
+      const [profileResponse, jobsResponse] = await Promise.all([
+        fetch("/api/auth/me"),
+        fetch("/api/jobs")
+      ]);
       
-      // Fetch mock cover letter templates
-      const response = await fetch('/mock-cover-letters/templates.json')
-      console.log('🔵 Template fetch response status:', response.status)
+      const profileData = await profileResponse.json();
+      setStudentProfile(profileData.user);
       
-      if (!response.ok) {
-        throw new Error(`Failed to fetch templates: ${response.status}`)
-      }
-      
-      const templates = await response.json()
-      console.log('🔵 Templates loaded:', Object.keys(templates))
-      
-      // Simulate AI generation delay
-      await new Promise((resolve) => setTimeout(resolve, 1500))
+      const jobsData = await jobsResponse.json();
+      const selectedJobsDetails = jobsData.jobs.filter((job: Job) => jobIds.includes(job.id));
+      setJobs(selectedJobsDetails);
 
-      // Determine which template to use based on job title
-      let template = templates.default
-      const jobTitleLower = job.title.toLowerCase()
+      // Set up the initial "loading" state for each card
+      const initialCoverLetters = selectedJobsDetails.map((job: Job) => ({
+        jobId: job.id,
+        content: "",
+        isGenerating: true, 
+      }));
+      setCoverLetters(initialCoverLetters);
+
+      setLoading(false); 
       
-      console.log('🔵 Job title (lowercase):', jobTitleLower)
-      
-      if (jobTitleLower.includes('software') || jobTitleLower.includes('developer') || jobTitleLower.includes('engineer')) {
-        template = templates.software_engineer
-        console.log('🔵 Using software_engineer template')
-      } else if (jobTitleLower.includes('data') || jobTitleLower.includes('analyst')) {
-        template = templates.data_analyst
-        console.log('🔵 Using data_analyst template')
-      } else if (jobTitleLower.includes('product') || jobTitleLower.includes('manager')) {
-        template = templates.product_manager
-        console.log('🔵 Using product_manager template')
-      } else if (jobTitleLower.includes('marketing') || jobTitleLower.includes('brand')) {
-        template = templates.marketing_specialist
-        console.log('🔵 Using marketing_specialist template')
-      } else if (jobTitleLower.includes('ux') || jobTitleLower.includes('ui') || jobTitleLower.includes('design')) {
-        template = templates.ux_designer
-        console.log('🔵 Using ux_designer template')
-      } else {
-        console.log('🔵 Using default template')
-      }
+      await generateAndSetCoverLetters(profileData.user?.id, jobIds, selectedJobsDetails);
 
-      console.log('🔵 Template length:', template?.length || 0)
-
-      // Customize the template with job details
-      let coverLetter = template
-      if (job.requirements) {
-        coverLetter = coverLetter.replace(
-          'Thank you for considering my application.',
-          `The position's requirements of ${job.requirements} align well with my skill set and experience.\n\nThank you for considering my application.`
-        )
-      }
-
-      console.log('✅ Cover letter generated, length:', coverLetter.length)
-
-      setCoverLetters((prev) =>
-        prev.map((cl) => (cl.jobId === job.id ? { ...cl, content: coverLetter, isGenerating: false } : cl)),
-      )
     } catch (error) {
-      console.error("🔴 Cover letter generation error:", error)
-      
-      // Fallback cover letter if JSON fetch fails
-      const fallbackLetter = `Dear Hiring Manager,
-
-I am writing to express my strong interest in the ${job.title} position at your company. With my background and passion for creating innovative solutions, I believe I would be an excellent fit for this role.
-
-${job.requirements ? `I have experience with ${job.requirements}, which aligns perfectly with your requirements.` : ""}
-
-In my free time, I enjoy exploring new technologies and contributing to open-source projects. I am excited about the opportunity to bring my skills and enthusiasm to your team.
-
-Thank you for considering my application. I look forward to discussing how I can contribute to your organization.
-
-Best regards,
-[Your Name]`
-
-      console.log('⚠️ Using fallback letter, length:', fallbackLetter.length)
-
-      setCoverLetters((prev) =>
-        prev.map((cl) =>
-          cl.jobId === job.id ? { ...cl, content: fallbackLetter, isGenerating: false } : cl,
-        ),
-      )
+        console.error('🔴 Error during initial data fetch:', error);
+        toast({ title: "Error", description: "Failed to load initial job data.", variant: "destructive" });
+        setLoading(false);
     }
   }
+
+  const generateAndSetCoverLetters = async (studentId: string, jobIds: string[], selectedJobsDetails: Job[]) => {
+    if (!studentId) {
+        toast({ title: "Error", description: "Could not identify student.", variant: "destructive" });
+        setCoverLetters(prev => prev.map(cl => ({...cl, isGenerating: false, content: "Could not start generation: Student not found."})));
+        return;
+    }
+      
+    try {
+      const payload = {
+        student_id: studentId,
+        job_ids: jobIds,
+      };
+
+      const generationResponse = await fetch(`http://127.0.0.1:8000/student/generate-cover-letters`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (!generationResponse.ok) {
+        throw new Error(`Server responded with status: ${generationResponse.status}`);
+      }
+
+      const result = await generationResponse.json();
+
+      const finalCoverLetters = selectedJobsDetails.map((job: Job) => {
+        const generated = result.cover_letters.find((cl: any) => cl.job_id === job.id);
+        return {
+          jobId: job.id,
+          content: generated ? generated.cover_letter : "Error: Could not generate.",
+          isGenerating: false,
+        };
+      });
+      setCoverLetters(finalCoverLetters);
+      toast({ title: "Success!", description: "AI cover letters are ready." });
+
+    } catch (error) {
+      console.error('🔴 Error in generateAndSetCoverLetters:', error);
+      toast({ title: "Error", description: "Failed to generate cover letters.", variant: "destructive" });
+      setCoverLetters(prev => prev.map(cl => ({...cl, isGenerating: false, content: "Generation failed."})));
+    }
+  }
+
+//   const generateCoverLetter = async (job: Job) => {
+//     try {
+//       console.log('🔵 Generating cover letter for job:', job.title)
+      
+//       // Fetch mock cover letter templates
+//       const response = await fetch('/mock-cover-letters/templates.json')
+//       console.log('🔵 Template fetch response status:', response.status)
+      
+//       if (!response.ok) {
+//         throw new Error(`Failed to fetch templates: ${response.status}`)
+//       }
+      
+//       const templates = await response.json()
+//       console.log('🔵 Templates loaded:', Object.keys(templates))
+      
+//       // Simulate AI generation delay
+//       await new Promise((resolve) => setTimeout(resolve, 1500))
+
+//       // Determine which template to use based on job title
+//       let template = templates.default
+//       const jobTitleLower = job.title.toLowerCase()
+      
+//       console.log('🔵 Job title (lowercase):', jobTitleLower)
+      
+//       if (jobTitleLower.includes('software') || jobTitleLower.includes('developer') || jobTitleLower.includes('engineer')) {
+//         template = templates.software_engineer
+//         console.log('🔵 Using software_engineer template')
+//       } else if (jobTitleLower.includes('data') || jobTitleLower.includes('analyst')) {
+//         template = templates.data_analyst
+//         console.log('🔵 Using data_analyst template')
+//       } else if (jobTitleLower.includes('product') || jobTitleLower.includes('manager')) {
+//         template = templates.product_manager
+//         console.log('🔵 Using product_manager template')
+//       } else if (jobTitleLower.includes('marketing') || jobTitleLower.includes('brand')) {
+//         template = templates.marketing_specialist
+//         console.log('🔵 Using marketing_specialist template')
+//       } else if (jobTitleLower.includes('ux') || jobTitleLower.includes('ui') || jobTitleLower.includes('design')) {
+//         template = templates.ux_designer
+//         console.log('🔵 Using ux_designer template')
+//       } else {
+//         console.log('🔵 Using default template')
+//       }
+
+//       console.log('🔵 Template length:', template?.length || 0)
+
+//       // Customize the template with job details
+//       let coverLetter = template
+//       if (job.requirements) {
+//         coverLetter = coverLetter.replace(
+//           'Thank you for considering my application.',
+//           `The position's requirements of ${job.requirements} align well with my skill set and experience.\n\nThank you for considering my application.`
+//         )
+//       }
+
+//       console.log('✅ Cover letter generated, length:', coverLetter.length)
+
+//       setCoverLetters((prev) =>
+//         prev.map((cl) => (cl.jobId === job.id ? { ...cl, content: coverLetter, isGenerating: false } : cl)),
+//       )
+//     } catch (error) {
+//       console.error("🔴 Cover letter generation error:", error)
+      
+//       // Fallback cover letter if JSON fetch fails
+//       const fallbackLetter = `Dear Hiring Manager,
+
+// I am writing to express my strong interest in the ${job.title} position at your company. With my background and passion for creating innovative solutions, I believe I would be an excellent fit for this role.
+
+// ${job.requirements ? `I have experience with ${job.requirements}, which aligns perfectly with your requirements.` : ""}
+
+// In my free time, I enjoy exploring new technologies and contributing to open-source projects. I am excited about the opportunity to bring my skills and enthusiasm to your team.
+
+// Thank you for considering my application. I look forward to discussing how I can contribute to your organization.
+
+// Best regards,
+// [Your Name]`
+
+//       console.log('⚠️ Using fallback letter, length:', fallbackLetter.length)
+
+//       setCoverLetters((prev) =>
+//         prev.map((cl) =>
+//           cl.jobId === job.id ? { ...cl, content: fallbackLetter, isGenerating: false } : cl,
+//         ),
+//       )
+//     }
+//   }
 
   const updateCoverLetter = (jobId: string, content: string) => {
     setCoverLetters((prev) => prev.map((cl) => (cl.jobId === jobId ? { ...cl, content } : cl)))
