@@ -64,11 +64,19 @@ function CoverLettersContent() {
       const profileData = await profileResponse.json()
       setStudentProfile(profileData.user)
 
-      // Check if student has a resume
-      if (!profileData.user?.resume_url) {
+      // Check if student has completed their profile
+      const isProfileComplete = !!(
+        profileData.user?.resume_url &&
+        profileData.user?.name?.trim() &&
+        profileData.user?.phone?.trim() &&
+        profileData.user?.skills?.trim() &&
+        profileData.user?.hobbies?.trim()
+      )
+      
+      if (!isProfileComplete) {
         toast({
-          title: "⚠️ Resume Required",
-          description: "Please upload your resume in your profile before applying to jobs",
+          title: "⚠️ Complete Your Profile",
+          description: "Please complete all required fields in your profile before applying to jobs",
           variant: "destructive",
         })
         router.push("/student/profile")
@@ -221,7 +229,7 @@ Best regards,
       console.log('🔴 No resume URL in profile')
       toast({
         title: "Error",
-        description: "Please upload your resume before applying",
+        description: "Please complete your profile before applying",
         variant: "destructive",
       })
       router.push("/student/profile")

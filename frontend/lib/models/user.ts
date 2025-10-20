@@ -10,6 +10,8 @@ export interface User {
   phone?: string
   hobbies?: string
   skills?: string
+  github_username?: string
+  tiktok_handle?: string
   created_at: string
 }
 
@@ -21,6 +23,8 @@ export interface UserProfile {
   phone?: string
   hobbies?: string
   skills?: string
+  github_username?: string
+  tiktok_handle?: string
   created_at: string
 }
 
@@ -31,7 +35,7 @@ export const UserModel = {
     email: string,
     password: string,
     role: "student" | "recruiter",
-    profile?: { name?: string; phone?: string; hobbies?: string; skills?: string },
+    profile?: { name?: string; phone?: string; hobbies?: string; skills?: string; github_username?: string; tiktok_handle?: string },
   ): Promise<User> => {
     const hashedPassword = await bcrypt.hash(password, 10)
     const db = readJsonFile<User>(USERS_FILE)
@@ -45,6 +49,8 @@ export const UserModel = {
       phone: profile?.phone || undefined,
       hobbies: profile?.hobbies || undefined,
       skills: profile?.skills || undefined,
+      github_username: profile?.github_username || undefined,
+      tiktok_handle: profile?.tiktok_handle || undefined,
       created_at: new Date().toISOString(),
     }
 
@@ -76,7 +82,7 @@ export const UserModel = {
 
   updateProfile: (
     id: number,
-    updates: { name?: string; phone?: string; hobbies?: string; skills?: string },
+    updates: { name?: string; phone?: string; hobbies?: string; skills?: string; github_username?: string; tiktok_handle?: string },
   ): boolean => {
     const db = readJsonFile<User>(USERS_FILE)
     const userIndex = db.data.findIndex((u) => u.id === id)

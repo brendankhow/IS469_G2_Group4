@@ -5,8 +5,12 @@ import { useParams, useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Loader2, Mail, Phone, FileText, Sparkles, AlertCircle, Calendar, Download, Eye } from "lucide-react"
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet"
+import { Input } from "@/components/ui/input"
+import { ScrollArea } from "@/components/ui/scroll-area"
+import { Loader2, Mail, Phone, FileText, Sparkles, AlertCircle, Calendar, Download, Eye, Send, Bot, User } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
+import { PDFViewerWithChatModal } from "@/components/pdf-viewer-with-chat-modal"
 
 interface Applicant {
   id: number
@@ -22,6 +26,18 @@ interface Applicant {
   created_at: string
 }
 
+interface ChatMessage {
+  role: "user" | "assistant"
+  content: string
+  timestamp: Date
+}
+
+interface Job {
+  id: number
+  title: string
+  description: string
+}
+
 export default function ApplicantsPage() {
   const params = useParams()
   const router = useRouter()
@@ -29,9 +45,24 @@ export default function ApplicantsPage() {
   const [applicants, setApplicants] = useState<Applicant[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedApplicant, setSelectedApplicant] = useState<Applicant | null>(null)
-  const [showChatbot, setShowChatbot] = useState<number | null>(null)
   const [showCommunityChatbot, setShowCommunityChatbot] = useState(false)
   const [rejectingAll, setRejectingAll] = useState(false)
+  
+  // Chat sidebar state
+  const [chatOpen, setChatOpen] = useState(false)
+  const [selectedCandidateForChat, setSelectedCandidateForChat] = useState<Applicant | null>(null)
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([])
+  const [currentMessage, setCurrentMessage] = useState("")
+  const [sendingMessage, setSendingMessage] = useState(false)
+  
+  // AI Matching state
+  const [loadingAIMatching, setLoadingAIMatching] = useState(false)
+  const [aiMatchingResults, setAiMatchingResults] = useState<string | null>(null)
+  
+  // PDF Viewer state
+  const [pdfViewerOpen, setPdfViewerOpen] = useState(false)
+  const [selectedResumeUrl, setSelectedResumeUrl] = useState<string | null>(null)
+  const [selectedCandidateForResume, setSelectedCandidateForResume] = useState<Applicant | null>(null)
 
   useEffect(() => {
     fetchApplicants()
@@ -50,6 +81,113 @@ export default function ApplicantsPage() {
       })
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleOpenChat = (applicant: Applicant) => {
+    // Check if we already have chat history for this candidate
+    const isSameCandidate = selectedCandidateForChat?.id === applicant.id
+    
+    if (!isSameCandidate) {
+      setSelectedCandidateForChat(applicant)
+      setChatMessages([
+        {
+          role: "assistant",
+          content: `Hi! I'm here to help you learn more about ${applicant.student_name || "this candidate"}. You can ask me about their skills, experience, or how well they match this position.`,
+          timestamp: new Date()
+        }
+      ])
+    }
+    
+    setChatOpen(true)
+  }
+
+  const handleSendMessage = async () => {
+    if (!currentMessage.trim() || !selectedCandidateForChat) return
+    
+    const userMessage: ChatMessage = {
+      role: "user",
+      content: currentMessage,
+      timestamp: new Date()
+    }
+    
+    setChatMessages(prev => [...prev, userMessage])
+    setCurrentMessage("")
+    setSendingMessage(true)
+    
+    // Mock AI response with delay
+    setTimeout(() => {
+      const mockResponses = [
+        `Based on ${selectedCandidateForChat.student_name}'s profile, they have strong skills in ${selectedCandidateForChat.student_skills || "various technical areas"}. Their experience aligns well with the job requirements.`,
+        `${selectedCandidateForChat.student_name} demonstrates a ${Math.floor(Math.random() * 15 + 80)}% match with this position. Their background in ${selectedCandidateForChat.student_skills?.split(',')[0] || "the field"} is particularly relevant.`,
+        `I'd recommend scheduling an interview with ${selectedCandidateForChat.student_name}. They show promise in areas that are critical for this role.`,
+        `${selectedCandidateForChat.student_name} has applied with enthusiasm. Their skills include ${selectedCandidateForChat.student_skills || "relevant competencies"}, which could be valuable for your team.`
+      ]
+      
+      const aiMessage: ChatMessage = {
+        role: "assistant",
+        content: mockResponses[Math.floor(Math.random() * mockResponses.length)],
+        timestamp: new Date()
+      }
+      
+      setChatMessages(prev => [...prev, aiMessage])
+      setSendingMessage(false)
+    }, 1000)
+  }
+
+  const handleAIMatching = async () => {
+    setShowCommunityChatbot(true)
+    setLoadingAIMatching(true)
+    setAiMatchingResults(null)
+    
+    try {
+      // Simulate processing delay
+      await new Promise(resolve => setTimeout(resolve, 2000))
+      
+      // Generate mock summary for current job's applicants
+      const candidateCount = applicants.length
+      const pendingCandidates = applicants.filter(app => app.status === "pending").length
+      
+      if (candidateCount === 0) {
+        setAiMatchingResults("No applicants yet. Check back once candidates start applying!")
+        return
+      }
+      
+      // Generate mock candidate list with match percentages
+      const mockCandidateResults = applicants.map(applicant => {
+        const matchPercentage = Math.floor(Math.random() * 15 + 80) // 80-95%
+        const skills = applicant.student_skills?.split(',').slice(0, 3) || []
+        return {
+          name: applicant.student_name || "Anonymous",
+          match: matchPercentage,
+          skills: skills,
+          status: applicant.status
+        }
+      })
+      
+      // Sort by match percentage descending
+      mockCandidateResults.sort((a, b) => b.match - a.match)
+      
+      let summary = `**Candidate Analysis** (${candidateCount} total, ${pendingCandidates} pending)\n\n`
+      
+      mockCandidateResults.forEach((result, index) => {
+        summary += `**${index + 1}. ${result.name}** - ${result.match}% match\n`
+        if (result.skills.length > 0) {
+          summary += `• Skills: ${result.skills.join(", ")}\n`
+        }
+        summary += `• Status: ${result.status.charAt(0).toUpperCase() + result.status.slice(1)}\n\n`
+      })
+      
+      setAiMatchingResults(summary)
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to fetch AI matching results",
+        variant: "destructive"
+      })
+      setAiMatchingResults("Failed to load matching results. Please try again.")
+    } finally {
+      setLoadingAIMatching(false)
     }
   }
 
@@ -126,9 +264,25 @@ export default function ApplicantsPage() {
     }
   }
 
-  const handleViewResume = (resumeUrl: string) => {
+  const handleViewResume = (resumeUrl: string, applicant: Applicant) => {
     if (resumeUrl) {
-      window.open(resumeUrl, '_blank')
+      setSelectedResumeUrl(resumeUrl)
+      setSelectedCandidateForResume(applicant)
+      
+      // Initialize chat for this candidate if not already present
+      const existingChat = chatMessages.length > 0 && selectedCandidateForChat?.id === applicant.id
+      if (!existingChat) {
+        setChatMessages([
+          {
+            role: "assistant",
+            content: `Hi! I'm here to help you learn more about ${applicant.student_name || "this candidate"}. You can ask me about their skills, experience, or how well they match this position.`,
+            timestamp: new Date()
+          }
+        ])
+        setSelectedCandidateForChat(applicant)
+      }
+      
+      setPdfViewerOpen(true)
     } else {
       toast({
         title: "Resume not available",
@@ -158,7 +312,7 @@ export default function ApplicantsPage() {
           </p>
         </div>
         <div className="flex gap-3">
-          <Button variant="outline" onClick={() => setShowCommunityChatbot(!showCommunityChatbot)}>
+          <Button variant="outline" onClick={handleAIMatching}>
             <Sparkles className="mr-2 h-4 w-4" />
             AI Matching
           </Button>
@@ -172,7 +326,7 @@ export default function ApplicantsPage() {
               ) : (
                 <>
                   <AlertCircle className="mr-2 h-4 w-4" />
-                  Reject Remaining ({pendingCount})
+                  Reject All Remaining ({pendingCount})
                 </>
               )}
             </Button>
@@ -186,28 +340,37 @@ export default function ApplicantsPage() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Sparkles className="h-5 w-5 text-primary" />
-              AI Candidate Matching
+              AI Candidate Matching Summary
             </CardTitle>
-            <CardDescription>Ask questions to find the best candidates using AI-powered matching</CardDescription>
+            <CardDescription>AI-powered matching analysis for this job's candidates</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="space-y-3">
-              <div className="rounded-lg bg-secondary/50 p-3 text-sm">
-                <p className="font-medium text-primary">Mock AI Response:</p>
-                <p className="mt-1 text-muted-foreground">
-                  Based on embeddings and cosine similarity, the top 3 candidates are:
-                </p>
-                <ul className="mt-2 list-inside list-disc space-y-1 text-muted-foreground">
-                  <li>Alice Johnson - 95% match (Strong React & Node.js skills)</li>
-                  <li>Bob Smith - 88% match (Python & ML experience)</li>
-                  <li>Charlie Davis - 82% match (Full-stack background)</li>
-                </ul>
+            {loadingAIMatching ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                <span className="ml-3 text-muted-foreground">Analyzing candidates for this job...</span>
               </div>
-              <p className="text-xs text-muted-foreground">
-                Note: This is a mock interface. In production, this would use OpenAI embeddings and vector similarity
-                search.
-              </p>
-            </div>
+            ) : (
+              <div className="space-y-3">
+                <ScrollArea className="max-h-[400px] pr-4">
+                  <div className="rounded-lg bg-secondary/50 p-4 text-sm">
+                    {aiMatchingResults?.split('\n').map((line, index) => {
+                      if (line.startsWith('**')) {
+                        return <p key={index} className="font-bold text-primary mt-3 first:mt-0">{line.replace(/\*\*/g, '')}</p>
+                      } else if (line.startsWith('•')) {
+                        return <p key={index} className="text-muted-foreground ml-2">{line}</p>
+                      } else if (line.trim()) {
+                        return <p key={index} className="text-muted-foreground">{line}</p>
+                      }
+                      return <br key={index} />
+                    })}
+                  </div>
+                </ScrollArea>
+                <p className="text-xs text-muted-foreground">
+                  Note: This is a mock interface. In production, this would use vector embeddings and cosine similarity search.
+                </p>
+              </div>
+            )}
           </CardContent>
         </Card>
       )}
@@ -265,7 +428,7 @@ export default function ApplicantsPage() {
                     <Button 
                       variant="outline" 
                       size="sm" 
-                      onClick={() => handleViewResume(applicant.resume_url!)}
+                      onClick={() => handleViewResume(applicant.resume_url!, applicant)}
                     >
                       <Eye className="mr-2 h-4 w-4" />
                       View Resume
@@ -275,20 +438,11 @@ export default function ApplicantsPage() {
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => setShowChatbot(showChatbot === applicant.id ? null : applicant.id)}
+                    onClick={() => handleOpenChat(applicant)}
                   >
                     <Sparkles className="mr-2 h-4 w-4" />
                     Chat with AI
                   </Button>
-
-                  {showChatbot === applicant.id && (
-                    <div className="rounded-lg border border-primary/50 bg-secondary/30 p-3">
-                      <p className="mb-1 text-xs font-medium">Candidate-Specific AI Chatbot</p>
-                      <p className="text-xs text-muted-foreground">
-                        Mock interface - would provide insights about this specific candidate
-                      </p>
-                    </div>
-                  )}
 
                   {applicant.status === "pending" && (
                     <div className="flex gap-2">
@@ -344,6 +498,131 @@ export default function ApplicantsPage() {
             </CardContent>
           </Card>
         </div>
+      )}
+
+      {/* Chat Sidebar */}
+      <Sheet open={chatOpen} onOpenChange={setChatOpen}>
+        <SheetContent side="right" className="w-full sm:w-1/4 sm:max-w-none flex flex-col p-0">
+          <SheetHeader className="p-6 pb-4 border-b border-border">
+            <SheetTitle className="flex items-center gap-2">
+              <Bot className="h-5 w-5 text-primary" />
+              Chat with AI
+            </SheetTitle>
+            <SheetDescription>
+              Ask questions about {selectedCandidateForChat?.student_name || "this candidate"}
+            </SheetDescription>
+          </SheetHeader>
+          
+          <ScrollArea className="flex-1 p-6">
+            <div className="space-y-4">
+              {chatMessages.map((message, index) => (
+                <div
+                  key={index}
+                  className={`flex gap-3 ${message.role === "user" ? "justify-end" : "justify-start"}`}
+                >
+                  {message.role === "assistant" && (
+                    <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
+                      <Bot className="h-4 w-4 text-primary" />
+                    </div>
+                  )}
+                  <div
+                    className={`max-w-[80%] rounded-lg p-3 ${
+                      message.role === "user"
+                        ? "bg-primary text-primary-foreground"
+                        : "bg-secondary text-secondary-foreground"
+                    }`}
+                  >
+                    <p className="text-sm">{message.content}</p>
+                    <p className="text-xs mt-1 opacity-70">
+                      {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </p>
+                  </div>
+                  {message.role === "user" && (
+                    <div className="flex-shrink-0 w-8 h-8 rounded-full bg-accent flex items-center justify-center">
+                      <User className="h-4 w-4 text-accent-foreground" />
+                    </div>
+                  )}
+                </div>
+              ))}
+              {sendingMessage && (
+                <div className="flex gap-3 justify-start">
+                  <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
+                    <Bot className="h-4 w-4 text-primary" />
+                  </div>
+                  <div className="bg-secondary text-secondary-foreground rounded-lg p-3">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  </div>
+                </div>
+              )}
+            </div>
+          </ScrollArea>
+          
+          <div className="p-6 pt-4 border-t border-border">
+            <div className="flex gap-2">
+              <Input
+                placeholder="Ask about this candidate..."
+                value={currentMessage}
+                onChange={(e) => setCurrentMessage(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault()
+                    handleSendMessage()
+                  }
+                }}
+                disabled={sendingMessage}
+                className="flex-1"
+              />
+              <Button 
+                onClick={handleSendMessage} 
+                disabled={!currentMessage.trim() || sendingMessage}
+                size="icon"
+              >
+                <Send className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        </SheetContent>
+      </Sheet>
+
+      {/* PDF Viewer with Chat Modal */}
+      {selectedCandidateForResume && (
+        <PDFViewerWithChatModal
+          isOpen={pdfViewerOpen}
+          onClose={() => setPdfViewerOpen(false)}
+          pdfUrl={selectedResumeUrl || ""}
+          candidate={selectedCandidateForResume}
+          chatMessages={chatMessages}
+          onSendMessage={async (message: string) => {
+            const userMessage: ChatMessage = {
+              role: "user",
+              content: message,
+              timestamp: new Date()
+            }
+            
+            setChatMessages(prev => [...prev, userMessage])
+            setSendingMessage(true)
+            
+            // Mock AI response with delay
+            setTimeout(() => {
+              const mockResponses = [
+                `Based on ${selectedCandidateForResume.student_name}'s profile, they have strong skills in ${selectedCandidateForResume.student_skills || "various technical areas"}. Their experience aligns well with the job requirements.`,
+                `${selectedCandidateForResume.student_name} demonstrates a ${Math.floor(Math.random() * 15 + 80)}% match with this position. Their background in ${selectedCandidateForResume.student_skills?.split(',')[0] || "the field"} is particularly relevant.`,
+                `I'd recommend scheduling an interview with ${selectedCandidateForResume.student_name}. They show promise in areas that are critical for this role.`,
+                `${selectedCandidateForResume.student_name} has applied with enthusiasm. Their skills include ${selectedCandidateForResume.student_skills || "relevant competencies"}, which could be valuable for your team.`
+              ]
+              
+              const aiMessage: ChatMessage = {
+                role: "assistant",
+                content: mockResponses[Math.floor(Math.random() * mockResponses.length)],
+                timestamp: new Date()
+              }
+              
+              setChatMessages(prev => [...prev, aiMessage])
+              setSendingMessage(false)
+            }, 1000)
+          }}
+          sendingMessage={sendingMessage}
+        />
       )}
     </div>
   )

@@ -46,11 +46,19 @@ export default function StudentDashboardPage() {
 
   const checkResumeAndFetchJobs = async () => {
     try {
-      // Check if user has uploaded a resume
+      // Check if user has uploaded a resume and filled all mandatory fields
       const profileResponse = await fetch("/api/auth/me")
       const profileData = await profileResponse.json()
       
-      if (!profileData.user?.resume_url) {
+      const isProfileComplete = !!(
+        profileData.user?.resume_url &&
+        profileData.user?.name?.trim() &&
+        profileData.user?.phone?.trim() &&
+        profileData.user?.skills?.trim() &&
+        profileData.user?.hobbies?.trim()
+      )
+      
+      if (!isProfileComplete) {
         setHasResume(false)
         setShowResumeAlert(true)
         setLoading(false)
@@ -162,11 +170,23 @@ export default function StudentDashboardPage() {
             <AlertDialogHeader>
               <AlertDialogTitle className="flex items-center gap-2">
                 <AlertTriangle className="h-5 w-5 text-amber-500" />
-                Resume Required
+                Complete Your Profile
               </AlertDialogTitle>
-              <AlertDialogDescription className="text-base">
-                You need to upload your resume before you can browse and apply for jobs. 
-                Please go to your profile page to upload your resume.
+              <AlertDialogDescription className="text-base space-y-3">
+                <p>You need to complete your profile before you can browse and apply for jobs.</p>
+                <div className="mt-3">
+                  <p className="font-medium text-foreground mb-2">Required fields:</p>
+                  <ul className="list-disc list-inside space-y-1 text-sm">
+                    <li>Full Name</li>
+                    <li>Phone Number</li>
+                    <li>Skills</li>
+                    <li>Hobbies</li>
+                    <li>Resume (PDF)</li>
+                  </ul>
+                  <p className="text-xs text-muted-foreground mt-2">
+                    GitHub Username and TikTok Handle are optional.
+                  </p>
+                </div>
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
@@ -174,7 +194,7 @@ export default function StudentDashboardPage() {
                 Go to Applications
               </AlertDialogCancel>
               <AlertDialogAction onClick={() => router.push("/student/profile")}>
-                Upload Resume
+                Complete Profile
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
@@ -183,7 +203,7 @@ export default function StudentDashboardPage() {
         <div className="p-8">
           <div className="mb-8">
             <h1 className="mb-2 text-3xl font-bold">Browse Jobs</h1>
-            <p className="text-muted-foreground">Upload your resume to start browsing jobs</p>
+            <p className="text-muted-foreground">Complete your profile to start browsing jobs</p>
           </div>
           
           <Card className="border-amber-500/50 bg-amber-500/5">

@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Loader2, Users, Mail, Phone, FileText, Eye, Calendar, MapPin, DollarSign } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
+import { PDFViewerModal } from "@/components/pdf-viewer-modal"
 
 interface Applicant {
   id: number
@@ -30,6 +31,8 @@ export default function AllApplicantsPage() {
   const [applicants, setApplicants] = useState<Applicant[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedApplicant, setSelectedApplicant] = useState<Applicant | null>(null)
+  const [isPdfModalOpen, setIsPdfModalOpen] = useState(false)
+  const [selectedPdfUrl, setSelectedPdfUrl] = useState("")
 
   useEffect(() => {
     fetchAllApplicants()
@@ -191,7 +194,10 @@ export default function AllApplicantsPage() {
                                 <Button
                                   variant="outline"
                                   size="sm"
-                                  onClick={() => window.open(application.resume_url, '_blank')}
+                                  onClick={() => {
+                                    setSelectedPdfUrl(application.resume_url!)
+                                    setIsPdfModalOpen(true)
+                                  }}
                                   className="flex-1"
                                 >
                                   <Eye className="h-3 w-3 mr-1" />
@@ -235,6 +241,14 @@ export default function AllApplicantsPage() {
           </Card>
         </div>
       )}
+
+      {/* PDF Viewer Modal */}
+      <PDFViewerModal
+        isOpen={isPdfModalOpen}
+        onClose={() => setIsPdfModalOpen(false)}
+        pdfUrl={selectedPdfUrl}
+        title="Resume"
+      />
     </div>
   )
 }
