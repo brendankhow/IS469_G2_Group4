@@ -41,7 +41,7 @@ export default function ProfilePage() {
       profile.phone?.trim() &&
       profile.skills?.trim() &&
       profile.hobbies?.trim() &&
-      currentResumeUrl
+      (currentResumeUrl || resumeFile)
     )
   }
 
