@@ -1,11 +1,12 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from typing import List, Dict
+from typing import List, Dict, Optional
 from dotenv import load_dotenv
 from huggingface_hub import InferenceClient
 from services.embedder import embedder
 from services.vector_store import VectorStore
 from services.supabase_client import supabase
+from utils.json_parser import format_response
 import os
 
 load_dotenv()
@@ -20,13 +21,23 @@ client = InferenceClient(token=HF_API_KEY)
 
 class ChatRequest(BaseModel):
     # testing
-    message: str = "I'm looking for a software engineer with experience in python and javascript."
+    message: str = "I'm looking for a software engineer with experience in frontend tech like typescript and javascript."
     # we can add more hyper parameters here 
     temperature: float = 0.7
 
-# TODO: response should be in JSON 
+# Response models
+class CandidateEvaluation(BaseModel):
+    name: str
+    fit_score: int
+    evaluation_bullets: List[str]
+    notable_github_projects: List[str]
+    next_step: str
+    github_link: str
+    candidate_link: str
+
 class ChatResponse(BaseModel):
-    response: str
+    response: Optional[List[CandidateEvaluation]] = None
+    raw_response: Optional[str] = None  # Fallback if JSON parsing fails
 
 @router.post("/community", response_model=ChatResponse)
 def chat(request: ChatRequest):
@@ -101,8 +112,12 @@ def chat(request: ChatRequest):
         # Build enriched RAG context with GitHub data
         rag_context_parts = []
         for i, c in enumerate(enriched_candidates):
+            github_username = c['github_username']
+            github_url = f"https://github.com/{github_username}" if github_username != "N/A" else "N/A"
+            
             candidate_info = [
-                f"{i+1}. {c['name']} (@{c['github_username']}) - Resume Match: {c['resume_similarity']:.3f}",
+                f"{i+1}. {c['name']} (@{github_username}) - Resume Match: {c['resume_similarity']:.3f}",
+                f"GitHub Profile: {github_url}",
                 f"Skills: {c['skills']}",
                 f"Resume excerpt: {c['resume_excerpt']}"
             ]
@@ -168,6 +183,29 @@ def chat(request: ChatRequest):
             - GitHub projects are evidence of skill, not requirements
             - Focus on relevant experience matching job needs
             - Provide actionable interview suggestions
+            - If the GitHub does not have any relevant projects, you do not need to mention it in the evaluation.
+
+            **CRITICAL: You MUST return ONLY valid JSON. Do not include any explanatory text before or after the JSON.**
+
+            Return in JSON format as follows:
+            [
+                {
+                    "name": "Candidate Name",
+                    "fit_score": 8, 
+                    "evaluation_bullets": [
+                        "• Bullet 1",
+                        "• Bullet 2",
+                        "• Bullet 3"
+                    ],
+                    "notable_github_projects": [
+                        "Project 1: Description",
+                        "Project 2: Description"
+                    ],
+                    "next_step": "Phone Screen",
+                    "github_link": "https://github.com/username",
+                    "candidate_link": ""
+                }
+            ]
             """
         
         USER_PROMPT = f"""
@@ -200,7 +238,17 @@ def chat(request: ChatRequest):
         
         response_text = completion.choices[0].message.content
         
-        return ChatResponse(response=response_text)
+        # Parse JSON response
+        try:
+            parsed_json = format_response(response_text)
+            # Validate and convert to Pydantic models
+            candidates = [CandidateEvaluation(**candidate) for candidate in parsed_json]
+            return ChatResponse(response=candidates)
+        except Exception as parse_error:
+            # If JSON parsing fails, return raw response as fallback
+            print(f"JSON parsing error: {parse_error}")
+            print(f"Raw response: {response_text}")
+            return ChatResponse(raw_response=response_text)
     
     except Exception as e:
         error_msg = str(e)
