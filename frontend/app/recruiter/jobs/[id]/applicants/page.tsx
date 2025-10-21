@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useParams, useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -63,10 +63,20 @@ export default function ApplicantsPage() {
   const [pdfViewerOpen, setPdfViewerOpen] = useState(false)
   const [selectedResumeUrl, setSelectedResumeUrl] = useState<string | null>(null)
   const [selectedCandidateForResume, setSelectedCandidateForResume] = useState<Applicant | null>(null)
+  const chatScrollRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     fetchApplicants()
   }, [params.id])
+
+  useEffect(() => {
+    if (chatScrollRef.current) {
+      const scrollContainer = chatScrollRef.current.querySelector('[data-radix-scroll-area-viewport]')
+      if (scrollContainer) {
+        scrollContainer.scrollTop = scrollContainer.scrollHeight
+      }
+    }
+  }, [chatMessages, sendingMessage])
 
   const fetchApplicants = async () => {
     try {
@@ -115,24 +125,45 @@ export default function ApplicantsPage() {
     setCurrentMessage("")
     setSendingMessage(true)
     
-    // Mock AI response with delay
-    setTimeout(() => {
-      const mockResponses = [
-        `Based on ${selectedCandidateForChat.student_name}'s profile, they have strong skills in ${selectedCandidateForChat.student_skills || "various technical areas"}. Their experience aligns well with the job requirements.`,
-        `${selectedCandidateForChat.student_name} demonstrates a ${Math.floor(Math.random() * 15 + 80)}% match with this position. Their background in ${selectedCandidateForChat.student_skills?.split(',')[0] || "the field"} is particularly relevant.`,
-        `I'd recommend scheduling an interview with ${selectedCandidateForChat.student_name}. They show promise in areas that are critical for this role.`,
-        `${selectedCandidateForChat.student_name} has applied with enthusiasm. Their skills include ${selectedCandidateForChat.student_skills || "relevant competencies"}, which could be valuable for your team.`
-      ]
+    try {
+      const response = await fetch('http://localhost:8000/chat/chat_with_history', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          messages: [...chatMessages, userMessage].map(msg => ({
+            role: msg.role,
+            content: msg.content
+          })),
+          temperature: 0.7
+        })
+      })
+      
+      if (!response.ok) {
+        throw new Error('Failed to get response')
+      }
+      
+      const data = await response.json()
       
       const aiMessage: ChatMessage = {
         role: "assistant",
-        content: mockResponses[Math.floor(Math.random() * mockResponses.length)],
+        content: data.response,
         timestamp: new Date()
       }
       
       setChatMessages(prev => [...prev, aiMessage])
+    } catch (error) {
+      console.error('Chat error:', error)
+      const errorMessage: ChatMessage = {
+        role: "assistant",
+        content: "Sorry, I couldn't process your message. Please try again.",
+        timestamp: new Date()
+      }
+      setChatMessages(prev => [...prev, errorMessage])
+    } finally {
       setSendingMessage(false)
-    }, 1000)
+    }
   }
 
   const handleAIMatching = async () => {
@@ -141,50 +172,48 @@ export default function ApplicantsPage() {
     setAiMatchingResults(null)
     
     try {
-      // Simulate processing delay
-      await new Promise(resolve => setTimeout(resolve, 2000))
+      // Step 1: Fetch job description
+      const jobResponse = await fetch(`/api/jobs/${params.id}`)
+      const jobData = await jobResponse.json()
       
-      // Generate mock summary for current job's applicants
-      const candidateCount = applicants.length
-      const pendingCandidates = applicants.filter(app => app.status === "pending").length
-      
-      if (candidateCount === 0) {
-        setAiMatchingResults("No applicants yet. Check back once candidates start applying!")
+      if (!jobData.job || !jobData.job.description) {
+        setAiMatchingResults("Job description not found. Please ensure the job has a description.")
         return
       }
       
-      // Generate mock candidate list with match percentages
-      const mockCandidateResults = applicants.map(applicant => {
-        const matchPercentage = Math.floor(Math.random() * 15 + 80) // 80-95%
-        const skills = applicant.student_skills?.split(',').slice(0, 3) || []
-        return {
-          name: applicant.student_name || "Anonymous",
-          match: matchPercentage,
-          skills: skills,
-          status: applicant.status
-        }
+      const jobDescription = jobData.job.description
+      
+      // Step 2: Call /resume/search
+      const searchResponse = await fetch('http://localhost:8000/resume/search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          job_description: jobDescription,
+          top_k: applicants.length.toString() // Search among current applicants
+        })
       })
       
-      // Sort by match percentage descending
-      mockCandidateResults.sort((a, b) => b.match - a.match)
+      const searchData = await searchResponse.json()
       
-      let summary = `**Candidate Analysis** (${candidateCount} total, ${pendingCandidates} pending)\n\n`
-      
-      mockCandidateResults.forEach((result, index) => {
-        summary += `**${index + 1}. ${result.name}** - ${result.match}% match\n`
-        if (result.skills.length > 0) {
-          summary += `• Skills: ${result.skills.join(", ")}\n`
-        }
-        summary += `• Status: ${result.status.charAt(0).toUpperCase() + result.status.slice(1)}\n\n`
-      })
-      
-      setAiMatchingResults(summary)
+      // Step 3: Format and display results
+      if (searchData.success && searchData.results.length > 0) {
+        const results = searchData.results
+        let summary = `**AI Matching Results** (${results.length} candidates analyzed)\n\n`
+        
+        results.forEach((result: any, index: number) => {
+          const profile = result.profile || {}
+          const matchPercentage = Math.round(result.similarity * 100)
+          summary += `**${index + 1}. ${profile.name || 'Unknown'}** - ${matchPercentage}% match\n`
+          summary += `• Skills: ${profile.skills || 'N/A'}\n`
+          summary += `• Email: ${profile.email || 'N/A'}\n\n`
+        })
+        
+        setAiMatchingResults(summary)
+      } else {
+        setAiMatchingResults("No matching candidates found for this job description.")
+      }
     } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to fetch AI matching results",
-        variant: "destructive"
-      })
+      console.error('AI Matching error:', error)
       setAiMatchingResults("Failed to load matching results. Please try again.")
     } finally {
       setLoadingAIMatching(false)
@@ -513,51 +542,51 @@ export default function ApplicantsPage() {
             </SheetDescription>
           </SheetHeader>
           
-          <ScrollArea className="flex-1 p-6">
-            <div className="space-y-4">
-              {chatMessages.map((message, index) => (
-                <div
-                  key={index}
-                  className={`flex gap-3 ${message.role === "user" ? "justify-end" : "justify-start"}`}
-                >
-                  {message.role === "assistant" && (
+          <div className="flex-1 overflow-hidden" ref={chatScrollRef}>
+            <ScrollArea className="h-full p-6">
+              <div className="space-y-4">
+                {chatMessages.map((message, index) => (
+                  <div
+                    key={index}
+                    className={`flex gap-3 ${message.role === "user" ? "justify-end" : "justify-start"}`}
+                  >
+                    {message.role === "assistant" && (
+                      <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
+                        <Bot className="h-4 w-4 text-primary" />
+                      </div>
+                    )}
+                    <div
+                      className={`max-w-[80%] rounded-lg p-3 ${
+                        message.role === "user"
+                          ? "bg-primary text-primary-foreground"
+                          : "bg-secondary text-secondary-foreground"
+                      }`}
+                    >
+                      <p className="text-sm">{message.content}</p>
+                      <p className="text-xs mt-1 opacity-70">
+                        {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </p>
+                    </div>
+                    {message.role === "user" && (
+                      <div className="flex-shrink-0 w-8 h-8 rounded-full bg-accent flex items-center justify-center">
+                        <User className="h-4 w-4 text-accent-foreground" />
+                      </div>
+                    )}
+                  </div>
+                ))}
+                {sendingMessage && (
+                  <div className="flex gap-3 justify-start">
                     <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
                       <Bot className="h-4 w-4 text-primary" />
                     </div>
-                  )}
-                  <div
-                    className={`max-w-[80%] rounded-lg p-3 ${
-                      message.role === "user"
-                        ? "bg-primary text-primary-foreground"
-                        : "bg-secondary text-secondary-foreground"
-                    }`}
-                  >
-                    <p className="text-sm">{message.content}</p>
-                    <p className="text-xs mt-1 opacity-70">
-                      {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                    </p>
-                  </div>
-                  {message.role === "user" && (
-                    <div className="flex-shrink-0 w-8 h-8 rounded-full bg-accent flex items-center justify-center">
-                      <User className="h-4 w-4 text-accent-foreground" />
+                    <div className="bg-secondary text-secondary-foreground rounded-lg p-3">
+                      <Loader2 className="h-4 w-4 animate-spin" />
                     </div>
-                  )}
-                </div>
-              ))}
-              {sendingMessage && (
-                <div className="flex gap-3 justify-start">
-                  <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
-                    <Bot className="h-4 w-4 text-primary" />
                   </div>
-                  <div className="bg-secondary text-secondary-foreground rounded-lg p-3">
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  </div>
-                </div>
-              )}
-            </div>
-          </ScrollArea>
-          
-          <div className="p-6 pt-4 border-t border-border">
+                )}
+              </div>
+            </ScrollArea>
+          </div>          <div className="p-6 pt-4 border-t border-border">
             <div className="flex gap-2">
               <Input
                 placeholder="Ask about this candidate..."
@@ -602,24 +631,45 @@ export default function ApplicantsPage() {
             setChatMessages(prev => [...prev, userMessage])
             setSendingMessage(true)
             
-            // Mock AI response with delay
-            setTimeout(() => {
-              const mockResponses = [
-                `Based on ${selectedCandidateForResume.student_name}'s profile, they have strong skills in ${selectedCandidateForResume.student_skills || "various technical areas"}. Their experience aligns well with the job requirements.`,
-                `${selectedCandidateForResume.student_name} demonstrates a ${Math.floor(Math.random() * 15 + 80)}% match with this position. Their background in ${selectedCandidateForResume.student_skills?.split(',')[0] || "the field"} is particularly relevant.`,
-                `I'd recommend scheduling an interview with ${selectedCandidateForResume.student_name}. They show promise in areas that are critical for this role.`,
-                `${selectedCandidateForResume.student_name} has applied with enthusiasm. Their skills include ${selectedCandidateForResume.student_skills || "relevant competencies"}, which could be valuable for your team.`
-              ]
+            try {
+              const response = await fetch('http://localhost:8000/chat/chat_with_history', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                  messages: [...chatMessages, userMessage].map(msg => ({
+                    role: msg.role,
+                    content: msg.content
+                  })),
+                  temperature: 0.7
+                })
+              })
+              
+              if (!response.ok) {
+                throw new Error('Failed to get response')
+              }
+              
+              const data = await response.json()
               
               const aiMessage: ChatMessage = {
                 role: "assistant",
-                content: mockResponses[Math.floor(Math.random() * mockResponses.length)],
+                content: data.response,
                 timestamp: new Date()
               }
               
               setChatMessages(prev => [...prev, aiMessage])
+            } catch (error) {
+              console.error('Chat error:', error)
+              const errorMessage: ChatMessage = {
+                role: "assistant",
+                content: "Sorry, I couldn't process your message. Please try again.",
+                timestamp: new Date()
+              }
+              setChatMessages(prev => [...prev, errorMessage])
+            } finally {
               setSendingMessage(false)
-            }, 1000)
+            }
           }}
           sendingMessage={sendingMessage}
         />

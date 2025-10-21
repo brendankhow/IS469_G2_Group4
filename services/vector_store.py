@@ -128,6 +128,9 @@ class VectorStore:
         Returns:
             List of inserted documents
         """
+        # Delete existing GitHub documents for this student to avoid duplicates
+        VectorStore.delete_student_github_repos(student_id)
+        
         data_batch = [
             {
                 "document_id": doc["id"],

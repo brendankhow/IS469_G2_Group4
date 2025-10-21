@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -48,6 +48,7 @@ export function PDFViewerWithChatModal({
 }: PDFViewerWithChatModalProps) {
   const [currentMessage, setCurrentMessage] = useState("")
   const [mounted, setMounted] = useState(false)
+  const scrollAreaRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     console.log('[PDF Viewer Chat Modal] Component mounted')
@@ -63,6 +64,15 @@ export function PDFViewerWithChatModal({
       console.log('[PDF Viewer Chat Modal] Modal opened with URL:', pdfUrl)
     }
   }, [isOpen, pdfUrl])
+
+  useEffect(() => {
+    if (scrollAreaRef.current) {
+      const scrollContainer = scrollAreaRef.current.querySelector('[data-radix-scroll-area-viewport]')
+      if (scrollContainer) {
+        scrollContainer.scrollTop = scrollContainer.scrollHeight
+      }
+    }
+  }, [chatMessages, sendingMessage])
 
   function handleSend() {
     if (currentMessage.trim() && !sendingMessage) {
@@ -107,49 +117,51 @@ export function PDFViewerWithChatModal({
               <p className="text-xs text-muted-foreground mt-1">Ask about this resume</p>
             </div>
 
-            <ScrollArea className="flex-1 p-4">
-              <div className="space-y-4">
-                {chatMessages.map((message, index) => (
-                  <div
-                    key={index}
-                    className={`flex gap-3 ${message.role === "user" ? "justify-end" : "justify-start"}`}
-                  >
-                    {message.role === "assistant" && (
+            <div className="flex-1 overflow-hidden" ref={scrollAreaRef}>
+              <ScrollArea className="h-full p-4">
+                <div className="space-y-4">
+                  {chatMessages.map((message, index) => (
+                    <div
+                      key={index}
+                      className={`flex gap-3 ${message.role === "user" ? "justify-end" : "justify-start"}`}
+                    >
+                      {message.role === "assistant" && (
+                        <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
+                          <Bot className="h-4 w-4 text-primary" />
+                        </div>
+                      )}
+                      <div
+                        className={`max-w-[80%] rounded-lg p-3 ${
+                          message.role === "user"
+                            ? "bg-primary text-primary-foreground"
+                            : "bg-secondary text-secondary-foreground"
+                        }`}
+                      >
+                        <p className="text-sm">{message.content}</p>
+                        <p className="text-xs mt-1 opacity-70">
+                          {message.timestamp.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                        </p>
+                      </div>
+                      {message.role === "user" && (
+                        <div className="flex-shrink-0 w-8 h-8 rounded-full bg-accent flex items-center justify-center">
+                          <User className="h-4 w-4 text-accent-foreground" />
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                  {sendingMessage && (
+                    <div className="flex gap-3 justify-start">
                       <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
                         <Bot className="h-4 w-4 text-primary" />
                       </div>
-                    )}
-                    <div
-                      className={`max-w-[80%] rounded-lg p-3 ${
-                        message.role === "user"
-                          ? "bg-primary text-primary-foreground"
-                          : "bg-secondary text-secondary-foreground"
-                      }`}
-                    >
-                      <p className="text-sm">{message.content}</p>
-                      <p className="text-xs mt-1 opacity-70">
-                        {message.timestamp.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                      </p>
-                    </div>
-                    {message.role === "user" && (
-                      <div className="flex-shrink-0 w-8 h-8 rounded-full bg-accent flex items-center justify-center">
-                        <User className="h-4 w-4 text-accent-foreground" />
+                      <div className="bg-secondary text-secondary-foreground rounded-lg p-3">
+                        <Loader2 className="h-4 w-4 animate-spin" />
                       </div>
-                    )}
-                  </div>
-                ))}
-                {sendingMessage && (
-                  <div className="flex gap-3 justify-start">
-                    <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
-                      <Bot className="h-4 w-4 text-primary" />
                     </div>
-                    <div className="bg-secondary text-secondary-foreground rounded-lg p-3">
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    </div>
-                  </div>
-                )}
-              </div>
-            </ScrollArea>
+                  )}
+                </div>
+              </ScrollArea>
+            </div>
 
             <div className="p-4 border-t">
               <div className="flex gap-2">

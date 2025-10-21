@@ -32,6 +32,7 @@ export default function ProfilePage() {
   const [resumeFile, setResumeFile] = useState<File | null>(null)
   const [currentResumeUrl, setCurrentResumeUrl] = useState<string | null>(null)
   const [pdfViewerOpen, setPdfViewerOpen] = useState(false)
+  const [githubError, setGithubError] = useState<string | null>(null)
 
   // Check if all mandatory fields are filled
   const isFormValid = () => {
@@ -139,6 +140,58 @@ export default function ProfilePage() {
       
       // Refresh profile data from server (ensure resume_url is persisted in DB)
       await fetchProfile()
+      
+      setGithubError(null) // Clear any previous GitHub errors before processing
+      
+      // If GitHub username is provided, process GitHub portfolio
+      if (profile.github_username?.trim()) {
+        try {
+          const githubResponse = await fetch('http://localhost:8000/github/create', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              username: profile.github_username.trim(),
+              student_id: studentId.toString()
+            })
+          })
+
+          if (!githubResponse.ok) {
+            let userFriendlyMessage = "Failed to fetch GitHub details. Please check your username and try again."
+            
+            if (githubResponse.status === 404) {
+              userFriendlyMessage = "GitHub username not found. Please verify the username is correct."
+            } else if (githubResponse.status === 403) {
+              userFriendlyMessage = "Access denied. Please check your GitHub username permissions."
+            } else if (githubResponse.status === 429) {
+              userFriendlyMessage = "GitHub API rate limit exceeded. Please try again later."
+            }
+            
+            setGithubError(userFriendlyMessage)
+            toast({
+              title: "GitHub Processing Failed",
+              description: userFriendlyMessage,
+              variant: "destructive",
+            })
+          } else {
+            setGithubError(null)
+            toast({
+              title: "GitHub Profile Processed",
+              description: "Your GitHub repositories have been analyzed and stored.",
+            })
+          }
+        } catch (githubError) {
+          console.error('GitHub processing error:', githubError)
+          const networkError = "Unable to connect to GitHub. Please check your internet connection and try again."
+          setGithubError(networkError)
+          toast({
+            title: "GitHub Error",
+            description: networkError,
+            variant: "destructive",
+          })
+        }
+      } else {
+        setGithubError(null)
+      }
       
       // If we just uploaded a resume, trigger backend vectorisation (after resume_url saved)
       if (didUpload && resumeUrl) {
@@ -365,10 +418,16 @@ export default function ProfilePage() {
               <Input
                 id="github_username"
                 value={profile?.github_username || ""}
-                onChange={(e) => setProfile({ ...profile!, github_username: e.target.value })}
+                onChange={(e) => {
+                  setProfile({ ...profile!, github_username: e.target.value })
+                  setGithubError(null) // Clear error when user types
+                }}
                 placeholder="without the @"
-                className="bg-secondary/50"
+                className={`bg-secondary/50 ${githubError ? 'border-red-500 focus:border-red-500' : ''}`}
               />
+              {githubError && (
+                <p className="text-red-500 text-sm">{githubError}</p>
+              )}
             </div>
             <div className="space-y-2">
               <Label htmlFor="tiktok_handle">TikTok Handle (Optional)</Label>
