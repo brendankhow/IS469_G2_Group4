@@ -15,18 +15,37 @@ class LLMClient:
         self.client = InferenceClient(token=hf_api_key)
 
     def generate_text(self, system_prompt: str, user_prompt: str, temperature: float = 0.7) -> str:
+        """
+        Generate text using the LLM with a system and user prompt.
+        
+        Args:
+            system_prompt: The system-level instruction
+            user_prompt: The user's input/query
+            temperature: Sampling temperature (0-1)
+            
+        Returns:
+            Generated text response
+        """
         try:
-            completion = self.client.chat.completions.create(
+            # Create the messages array
+            messages = [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ]
+            
+            # Call the Hugging Face API using chat_completion method
+            response = self.client.chat_completion(
+                messages=messages,
                 model=self.model_name,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt}
-                ],
-                temperature=temperature
+                temperature=temperature,
+                max_tokens=2000
             )
-            return completion.choices[0].message.content
+            
+            # Extract and return the response content
+            return response.choices[0].message.content
+            
         except Exception as e:
-            print(f"Error during LLM generation: {e}")
-            return "An error occurred while generating the response."
+            print(f"Error generating text: {e}")
+            return f"Error: {str(e)}"
 
 llm_client = LLMClient()

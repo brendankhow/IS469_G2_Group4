@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { Briefcase, Users, Home, User, Sparkles, LogOut } from "lucide-react"
+import { Briefcase, Users, Home, User, Sparkles, LogOut, Search } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { useState } from "react"
 
@@ -46,6 +46,7 @@ export function RecruiterSidebar() {
     { href: "/recruiter/dashboard", icon: Briefcase, label: "My Jobs" },
     { href: "/recruiter/post-job", icon: Briefcase, label: "Post Job" },
     { href: "/recruiter/applicants", icon: Users, label: "All Applicants" },
+    { href: "/recruiter/headhunting", icon: Search, label: "Headhunting" },
     { href: "/recruiter/profile", icon: User, label: "Profile" },
   ]
 

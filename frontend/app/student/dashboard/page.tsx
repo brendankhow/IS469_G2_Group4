@@ -15,9 +15,12 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import { MapPin, DollarSign, Loader2, AlertTriangle } from "lucide-react"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
+import { ScrollArea } from "@/components/ui/scroll-area"
+import { MapPin, DollarSign, Loader2, AlertTriangle, FileText } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useToast } from "@/hooks/use-toast"
+import ReactMarkdown from "react-markdown"
 
 interface Job {
   id: string
@@ -39,6 +42,10 @@ export default function StudentDashboardPage() {
   const [showResumeAlert, setShowResumeAlert] = useState(false)
   const [hasResume, setHasResume] = useState(false)
   const [appliedJobIds, setAppliedJobIds] = useState<Set<string>>(new Set())
+  const [feedbackOpen, setFeedbackOpen] = useState(false)
+  const [feedback, setFeedback] = useState<string | null>(null)
+  const [loadingFeedback, setLoadingFeedback] = useState(false)
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
 
   useEffect(() => {
     checkResumeAndFetchJobs()
@@ -66,6 +73,9 @@ export default function StudentDashboardPage() {
       }
 
       setHasResume(true)
+      
+      // Store user ID for feedback
+      setCurrentUserId(profileData.user.id)
       
       // Fetch applications to determine which jobs are already applied to
       await fetchApplications()
@@ -151,6 +161,47 @@ export default function StudentDashboardPage() {
       return
     }
     router.push(`/student/cover-letters?jobs=${selectedJobs.join(",")}`)
+  }
+
+  const handleGetFeedback = async () => {
+    if (!currentUserId) {
+      toast({
+        title: "Error",
+        description: "User ID not found",
+        variant: "destructive",
+      })
+      return
+    }
+
+    setLoadingFeedback(true)
+    setFeedbackOpen(true)
+    setFeedback(null)
+
+    try {
+      const formData = new FormData()
+      formData.append("student_id", currentUserId)
+
+      const response = await fetch("http://localhost:8000/student/feedback", {
+        method: "POST",
+        body: formData,
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to get feedback")
+      }
+
+      const data = await response.json()
+      setFeedback(data.feedback)
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to generate feedback. Please try again.",
+        variant: "destructive",
+      })
+      setFeedbackOpen(false)
+    } finally {
+      setLoadingFeedback(false)
+    }
   }
 
   if (loading) {
@@ -242,9 +293,15 @@ export default function StudentDashboardPage() {
             {selectedJobs.length} / 5
           </Badge>
         </div>
-        <Button onClick={handleGenerateCoverLetters} disabled={selectedJobs.length === 0}>
-          Generate Cover Letters
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={handleGetFeedback}>
+            <FileText className="mr-2 h-4 w-4" />
+            Get Resume Feedback
+          </Button>
+          <Button onClick={handleGenerateCoverLetters} disabled={selectedJobs.length === 0}>
+            Generate Cover Letters
+          </Button>
+        </div>
       </div>
 
       {/* Jobs Grid */}
@@ -307,6 +364,32 @@ export default function StudentDashboardPage() {
           <p className="text-muted-foreground">No jobs available at the moment</p>
         </div>
       )}
+
+      {/* Feedback Dialog */}
+      <Dialog open={feedbackOpen} onOpenChange={setFeedbackOpen}>
+        <DialogContent className="max-w-3xl max-h-[80vh]">
+          <DialogHeader>
+            <DialogTitle>Resume Feedback</DialogTitle>
+            <DialogDescription>
+              AI-powered analysis of your resume
+            </DialogDescription>
+          </DialogHeader>
+          <ScrollArea className="h-[60vh] pr-4">
+            {loadingFeedback ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                <span className="ml-3 text-muted-foreground">Analyzing your resume...</span>
+              </div>
+            ) : feedback ? (
+              <div className="prose prose-sm dark:prose-invert max-w-none">
+                <ReactMarkdown>{feedback}</ReactMarkdown>
+              </div>
+            ) : (
+              <p className="text-muted-foreground">No feedback available</p>
+            )}
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

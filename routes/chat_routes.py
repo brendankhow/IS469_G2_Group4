@@ -221,8 +221,7 @@ def chat(request: ChatRequest):
         print(USER_PROMPT)
         # i checked the similarity scores - the resume is pretty low but might be cuz of the prompt 
         
-        completion = client.chat.completions.create(
-            model=MODEL_NAME,
+        completion = client.chat_completion(
             messages=[
                 {
                     "role": "system",
@@ -233,6 +232,7 @@ def chat(request: ChatRequest):
                     "content": USER_PROMPT
                 }
             ],
+            model=MODEL_NAME,
             temperature=request.temperature
         )
         
@@ -259,7 +259,7 @@ class ChatHistoryRequest(BaseModel):
     temperature: float = 0.7 
 
 @router.post("/chat_with_history", response_model=ChatResponse)
-def chat_with_history(request: ChatHistoryRequest) -> str:
+def chat_with_history(request: ChatHistoryRequest) -> ChatResponse:
     """
     LLM call with conversation history (for multi-turn chats).
     
@@ -270,7 +270,7 @@ def chat_with_history(request: ChatHistoryRequest) -> str:
         model: LLM model to use
     
     Returns:
-        str: The LLM's response text
+        ChatResponse: The LLM's response
     
     Example usage:
         {
@@ -284,8 +284,7 @@ def chat_with_history(request: ChatHistoryRequest) -> str:
         }
     """
     try:
-        completion = client.chat.completions.create(
-            model=MODEL_NAME,
+        completion = client.chat_completion(
             messages=[
                 {
                     "role": "system",
@@ -293,10 +292,11 @@ def chat_with_history(request: ChatHistoryRequest) -> str:
                 },
                 *request.messages  # unpack conversation history
             ],
+            model=MODEL_NAME,
             temperature=request.temperature,
         )
         
-        return ChatResponse(response=completion.choices[0].message.content)   
+        return ChatResponse(raw_response=completion.choices[0].message.content)   
      
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"LLM error: {str(e)}")

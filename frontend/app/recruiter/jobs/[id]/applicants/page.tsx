@@ -11,6 +11,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Loader2, Mail, Phone, FileText, Sparkles, AlertCircle, Calendar, Download, Eye, Send, Bot, User } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { PDFViewerWithChatModal } from "@/components/pdf-viewer-with-chat-modal"
+import ReactMarkdown from "react-markdown"
 
 interface Applicant {
   id: number
@@ -148,7 +149,7 @@ export default function ApplicantsPage() {
       
       const aiMessage: ChatMessage = {
         role: "assistant",
-        content: data.response,
+        content: data.raw_response || data.response || "No response received",
         timestamp: new Date()
       }
       
@@ -395,9 +396,6 @@ export default function ApplicantsPage() {
                     })}
                   </div>
                 </ScrollArea>
-                <p className="text-xs text-muted-foreground">
-                  Note: This is a mock interface. In production, this would use vector embeddings and cosine similarity search.
-                </p>
               </div>
             )}
           </CardContent>
@@ -562,7 +560,13 @@ export default function ApplicantsPage() {
                           : "bg-secondary text-secondary-foreground"
                       }`}
                     >
-                      <p className="text-sm">{message.content}</p>
+                      {message.role === "assistant" ? (
+                        <div className="text-sm prose prose-sm dark:prose-invert max-w-none">
+                          <ReactMarkdown>{message.content}</ReactMarkdown>
+                        </div>
+                      ) : (
+                        <p className="text-sm">{message.content}</p>
+                      )}
                       <p className="text-xs mt-1 opacity-70">
                         {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                       </p>
@@ -654,7 +658,7 @@ export default function ApplicantsPage() {
               
               const aiMessage: ChatMessage = {
                 role: "assistant",
-                content: data.response,
+                content: data.raw_response || data.response || "No response received",
                 timestamp: new Date()
               }
               

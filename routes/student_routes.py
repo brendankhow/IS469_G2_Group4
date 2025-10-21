@@ -28,14 +28,35 @@ class RefinementRequest(BaseModel):
 
 @router.post("/feedback")
 async def get_resume_feedback(student_id: str = Form(...)):
-
-    resume_data = VectorStore.get_resume_by_student_id(student_id)
-    if not resume_data:
-        raise HTTPException(status_code=404, detail="Resume not found")
+    """
+    Generate AI-powered feedback for a student's resume.
     
-    feedback = coverLetterService.generate_resume_feedback(resume_data["resume_text"])
+    Args:
+        student_id: The student's ID from the database (UUID format)
     
-    return {"student_id": student_id, "feedback": feedback}
+    Returns:
+        JSON with student_id and feedback text
+    """
+    try:
+        print(f"[Feedback] Received request for student_id: {student_id}")
+        
+        resume_data = VectorStore.get_resume_by_student_id(student_id)
+        if not resume_data:
+            print(f"[Feedback] Resume not found for student_id: {student_id}")
+            raise HTTPException(status_code=404, detail=f"Resume not found for student ID: {student_id}")
+        
+        print(f"[Feedback] Resume found, generating feedback...")
+        feedback = coverLetterService.generate_resume_feedback(resume_data["resume_text"])
+        print(f"[Feedback] Feedback generated successfully")
+        
+        return {"student_id": student_id, "feedback": feedback}
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[Feedback] Error occurred: {str(e)}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Failed to generate feedback: {str(e)}")
 
 
 @router.post("/generate-cover-letters")

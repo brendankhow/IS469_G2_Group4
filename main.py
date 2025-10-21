@@ -52,6 +52,8 @@ app.include_router(resume_router, prefix="/resume", tags=["Resume Helper"])
 
 # github routes
 app.include_router(github_router, prefix="/github", tags=["GitHub Helper"])
+
+# student routes
 app.include_router(student_router, prefix="/student", tags=["Student Helper"])
     
 @app.get("/profiles", tags=["Supabase Helper"])

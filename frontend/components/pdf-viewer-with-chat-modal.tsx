@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Loader2, Send, Bot, User } from "lucide-react"
+import ReactMarkdown from "react-markdown"
 
 interface ChatMessage {
   role: "user" | "assistant"
@@ -137,7 +138,13 @@ export function PDFViewerWithChatModal({
                             : "bg-secondary text-secondary-foreground"
                         }`}
                       >
-                        <p className="text-sm">{message.content}</p>
+                        {message.role === "assistant" ? (
+                          <div className="text-sm prose prose-sm dark:prose-invert max-w-none">
+                            <ReactMarkdown>{message.content}</ReactMarkdown>
+                          </div>
+                        ) : (
+                          <p className="text-sm">{message.content}</p>
+                        )}
                         <p className="text-xs mt-1 opacity-70">
                           {message.timestamp.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                         </p>
