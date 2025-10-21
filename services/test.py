@@ -1,23 +1,17 @@
 """
-Example script to download and store TikTok videos
-Run this after setting up the database and storage bucket
+TikTok Service Test
+File location: services/Tiktok/test.py
+Service location: services/tiktok_service.py
 """
 
-import sys
-import os
-sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
-
-from services.Tiktok.tiktok_supabase_service import TikTokSupabaseService
-import uuid
+# Now we can import from services
+from tiktok_store import TikTokService
 
 
 def example_download_videos():
     """Example: Download videos for a student"""
     
-    service = TikTokSupabaseService()
-    
-    # Use actual student ID for testing
-    student_id = "0cc080d8-fb54-48c3-9885-17f680d0e5f6"
+    student_id = "eb4dc476-c30a-420e-9218-b996d45ce878"
     
     print("=" * 60)
     print("TikTok Video Download Example")
@@ -25,7 +19,7 @@ def example_download_videos():
     
     # 1. Check if student has TikTok username
     print("\n1. Checking TikTok user...")
-    tiktok_user = service.get_tiktok_user_by_student_id(student_id)
+    tiktok_user = TikTokService.get_tiktok_user_by_student_id(student_id)
     
     if not tiktok_user:
         print(f"✗ No TikTok user found for student {student_id}")
@@ -41,10 +35,10 @@ def example_download_videos():
     # 2. Download videos
     print("\n2. Downloading videos...")
     
-    result = service.download_and_store_videos(
+    result = TikTokService.download_and_store_videos(
         student_id=student_id,
-        max_videos=3,  # Download 3 videos
-        random_selection=False  # Get first 3 videos
+        max_videos=3,
+        random_selection=False
     )
     
     # 3. Show results
@@ -61,31 +55,38 @@ def example_download_videos():
             print(f"\n  Video {i}:")
             print(f"    ID: {video['video_id']}")
             print(f"    TikTok URL: {video['video_url']}")
-            print(f"    Storage Path: {video['local_path']}")
+            print(f"    Public URL: {video['public_url']}")
+            print(f"    Storage: {video['storage_path']}")
+            print(f"    Size: {video['file_size_mb']}MB")
     else:
         print(f"\n✗ Failed to download videos")
         print(f"  Error: {result.get('error', 'Unknown error')}")
     
     # 4. List all videos in database
     print("\n4. All videos in database:")
-    all_videos = service.get_videos_by_student_id(student_id)
+    all_videos = TikTokService.get_videos_by_student_id(student_id)
     
     if all_videos:
         print(f"\nTotal videos: {len(all_videos)}")
         for i, video in enumerate(all_videos, 1):
             print(f"\n{i}. Video ID: {video['video_id']}")
-            print(f"   User ID: {video['user_id']}")
             print(f"   Created: {video.get('created_at', 'N/A')}")
-            print(f"   URL: {video['video_url']}")
-            print(f"   Local Path: {video['local_path']}")
+            print(f"   URL: {video.get('public_url', 'N/A')}")
+            print(f"   Size: {video.get('file_size_mb', 0)}MB")
     else:
         print("\nNo videos found in database")
+    
+    # # 5. Get summary
+    # print("\n5. Portfolio Summary:")
+    # summary = TikTokService.get_student_tiktok_summary(student_id)
+    # print(f"  Username: @{summary['username']}")
+    # print(f"  Total Videos: {summary['total_videos']}")
+    # print(f"  Total Size: {summary['total_size_mb']}MB")
 
 
 def example_get_videos():
     """Example: Just retrieve videos without downloading"""
     
-    service = TikTokSupabaseService()
     student_id = "0cc080d8-fb54-48c3-9885-17f680d0e5f6"
     
     print("=" * 60)
@@ -93,7 +94,7 @@ def example_get_videos():
     print("=" * 60)
     
     # Get TikTok user
-    tiktok_user = service.get_tiktok_user_by_student_id(student_id)
+    tiktok_user = TikTokService.get_tiktok_user_by_student_id(student_id)
     
     if tiktok_user:
         print(f"\n✓ TikTok User:")
@@ -105,20 +106,23 @@ def example_get_videos():
         return
     
     # Get videos
-    videos = service.get_videos_by_student_id(student_id)
+    videos = TikTokService.get_videos_by_student_id(student_id)
     print(f"\nVideos in database: {len(videos)}")
     
     for i, video in enumerate(videos, 1):
         print(f"\n{i}. Video ID: {video['video_id']}")
-        print(f"   User ID: {video['user_id']}")
         print(f"   TikTok: {video['video_url']}")
-        print(f"   Storage: {video['local_path']}")
+        print(f"   Public URL: {video.get('public_url', 'N/A')}")
         print(f"   Created: {video.get('created_at', 'N/A')}")
+    
+    # Get summary
+    summary = TikTokService.get_student_tiktok_summary(student_id)
+    print(f"\n📊 Summary:")
+    print(f"  @{summary['username']}: {summary['total_videos']} videos ({summary['total_size_mb']}MB)")
 
 
 if __name__ == "__main__":
-    # Run the example
-    print("\n🎬 TikTok Video Download Example\n")
+    print("\n🎬 TikTok Video Service Examples\n")
     
     # Choose which example to run:
     
@@ -127,5 +131,6 @@ if __name__ == "__main__":
     
     # Example 2: Just retrieve existing videos
     # example_get_videos()
+
     
     print("\n✓ Done!\n")
