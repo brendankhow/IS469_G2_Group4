@@ -75,6 +75,25 @@ class VectorStore:
             .execute()
         return response.data[0]
     
+    @staticmethod
+    def delete_resume_embedding(student_id: str) -> bool:
+        """
+        Delete resume embedding for a specific student.
+        Returns True if successful, False otherwise.
+        """
+        try:
+            response = supabase.table("resume_embeddings")\
+                .delete()\
+                .eq("student_id", student_id)\
+                .execute()
+            
+            count = len(response.data) if response.data else 0
+            print(f"Deleted {count} resume embedding(s) for student {student_id}")
+            return True
+        except Exception as e:
+            print(f"Error deleting resume embedding for student {student_id}: {str(e)}")
+            return False
+    
     # ========== GitHub Portfolio Methods ==========
     
     @staticmethod

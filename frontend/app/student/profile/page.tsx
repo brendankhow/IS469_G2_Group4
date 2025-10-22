@@ -288,6 +288,26 @@ export default function ProfilePage() {
         throw new Error(errorData.error || "Failed to delete resume from storage")
       }
 
+      // Second, delete resume embeddings from vector store
+      try {
+        const embeddingsDeleteResponse = await fetch(
+          `http://localhost:8000/resume/student/${profile.id}`,
+          {
+            method: "DELETE",
+          }
+        )
+
+        if (!embeddingsDeleteResponse.ok) {
+          console.error("Failed to delete resume embeddings, but continuing...")
+          // Don't throw error - we still want to update the profile even if embedding deletion fails
+        } else {
+          console.log("Resume embeddings deleted successfully")
+        }
+      } catch (embeddingError) {
+        console.error("Error deleting embeddings:", embeddingError)
+        // Continue anyway
+      }
+
       // Then update profile to remove resume_url
       const response = await fetch("/api/auth/me", {
         method: "PATCH",
@@ -311,7 +331,7 @@ export default function ProfilePage() {
 
       toast({
         title: "✅ Resume removed",
-        description: "Your resume has been removed successfully",
+        description: "Your resume and embeddings have been removed successfully",
       })
 
       await fetchProfile()

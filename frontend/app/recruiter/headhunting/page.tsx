@@ -105,11 +105,11 @@ export default function HeadhuntingPage() {
   }
 
   return (
-    <div className="flex h-screen overflow-hidden p-8 gap-6">
+    <div className="flex h-[calc(100vh-2rem)] overflow-hidden p-4 gap-6">
       {/* Main Chat Area */}
-      <div className="flex-1 flex flex-col min-h-0">
-        <Card className="flex-1 flex flex-col overflow-hidden">
-          <CardHeader className="border-b flex-shrink-0">
+      <div className="flex-1 flex flex-col h-full">
+        <Card className="flex-1 flex flex-col h-full overflow-hidden border-2">
+          <CardHeader className="border-b-2 flex-shrink-0">
             <CardTitle className="flex items-center gap-2">
               <Sparkles className="h-5 w-5 text-primary" />
               AI-Powered Headhunting
@@ -121,7 +121,7 @@ export default function HeadhuntingPage() {
           
           <CardContent className="flex-1 flex flex-col p-0 min-h-0 overflow-hidden">
             {/* Chat History */}
-            <ScrollArea className="flex-1 p-6 overflow-y-auto">
+            <ScrollArea className="flex-1 p-8 overflow-y-auto">
               {searchHistory.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-full text-center space-y-4">
                   <Search className="h-16 w-16 text-muted-foreground/50" />
@@ -162,7 +162,7 @@ export default function HeadhuntingPage() {
                     <div key={index} className="space-y-4">
                       {item.isUser ? (
                         <div className="flex justify-end">
-                          <div className="max-w-[85%] rounded-lg p-4 bg-primary text-primary-foreground">
+                          <div className="max-w-[85%] rounded-lg p-5 bg-primary text-primary-foreground shadow-md border-2 border-primary/20">
                             <p className="text-sm whitespace-pre-wrap">{item.message}</p>
                             <p className="text-xs mt-2 opacity-70">
                               {item.timestamp.toLocaleTimeString([], {
@@ -173,21 +173,21 @@ export default function HeadhuntingPage() {
                           </div>
                         </div>
                       ) : (
-                        <div className="space-y-4">
+                        <div className="space-y-5">
                           {/* Render structured candidate results */}
                           {item.candidates && item.candidates.length > 0 && (
-                            <div className="space-y-4">
+                            <div className="space-y-5">
                               <div className="text-sm font-medium text-muted-foreground">
                                 Found {item.candidates.length} matching candidate{item.candidates.length !== 1 ? 's' : ''}
                               </div>
                               {item.candidates.map((candidate, candIndex) => (
-                                <Card key={candIndex} className="overflow-hidden">
-                                  <CardHeader className="pb-3">
+                                <Card key={candIndex} className="overflow-hidden border-2 shadow-sm hover:shadow-md transition-shadow">
+                                  <CardHeader className="pb-4 bg-muted/30 border-b-2">
                                     <div className="flex items-start justify-between">
                                       <div className="space-y-1 flex-1">
                                         <CardTitle className="text-lg">{candidate.name}</CardTitle>
                                         <div className="flex gap-2 items-center">
-                                          <Badge variant={candidate.fit_score >= 80 ? "default" : candidate.fit_score >= 60 ? "secondary" : "outline"}>
+                                          <Badge variant={candidate.fit_score >= 80 ? "default" : candidate.fit_score >= 60 ? "secondary" : "outline"} className="border-2">
                                             <Star className="h-3 w-3 mr-1" />
                                             Fit Score: {candidate.fit_score}%
                                           </Badge>
@@ -206,11 +206,11 @@ export default function HeadhuntingPage() {
                                       </div>
                                     </div>
                                   </CardHeader>
-                                  <CardContent className="space-y-3">
+                                  <CardContent className="space-y-4 pt-4">
                                     {candidate.evaluation_bullets.length > 0 && (
                                       <div>
-                                        <p className="text-xs font-medium text-muted-foreground mb-1">Evaluation</p>
-                                        <ul className="text-sm space-y-1 list-disc list-inside">
+                                        <p className="text-xs font-medium text-muted-foreground mb-2">Evaluation</p>
+                                        <ul className="text-sm space-y-1.5 list-disc list-inside">
                                           {candidate.evaluation_bullets.map((bullet, bulletIndex) => (
                                             <li key={bulletIndex}>{bullet}</li>
                                           ))}
@@ -219,8 +219,8 @@ export default function HeadhuntingPage() {
                                     )}
                                     {candidate.notable_github_projects.length > 0 && (
                                       <div>
-                                        <p className="text-xs font-medium text-muted-foreground mb-1">Notable Projects</p>
-                                        <ul className="text-sm space-y-1">
+                                        <p className="text-xs font-medium text-muted-foreground mb-2">Notable Projects</p>
+                                        <ul className="text-sm space-y-1.5">
                                           {candidate.notable_github_projects.map((project, projIndex) => (
                                             <li key={projIndex} className="flex items-start gap-2">
                                               <ExternalLink className="h-3 w-3 mt-1 flex-shrink-0" />
@@ -230,12 +230,12 @@ export default function HeadhuntingPage() {
                                         </ul>
                                       </div>
                                     )}
-                                    <div className="pt-2 border-t">
-                                      <p className="text-xs font-medium text-muted-foreground mb-1">Recommended Next Step</p>
+                                    <div className="pt-3 border-t-2">
+                                      <p className="text-xs font-medium text-muted-foreground mb-2">Recommended Next Step</p>
                                       <p className="text-sm">{candidate.next_step}</p>
                                     </div>
                                     {candidate.candidate_link && (
-                                      <Button variant="outline" size="sm" className="w-full" asChild>
+                                      <Button variant="outline" size="sm" className="w-full border-2" asChild>
                                         <a href={candidate.candidate_link} target="_blank" rel="noopener noreferrer">
                                           View Full Profile
                                         </a>
@@ -248,7 +248,7 @@ export default function HeadhuntingPage() {
                           )}
                           {/* Render raw text response if structured data not available */}
                           {item.message && (
-                            <div className="bg-secondary rounded-lg p-4">
+                            <div className="bg-secondary rounded-lg p-5 border-2 shadow-sm">
                               <div className="prose prose-sm dark:prose-invert max-w-none">
                                 <ReactMarkdown>{item.message}</ReactMarkdown>
                               </div>
@@ -266,7 +266,7 @@ export default function HeadhuntingPage() {
                   ))}
                   {loading && (
                     <div className="flex justify-start">
-                      <div className="bg-secondary rounded-lg p-4">
+                      <div className="bg-secondary rounded-lg p-5 border-2 shadow-sm">
                         <Loader2 className="h-5 w-5 animate-spin text-primary" />
                       </div>
                     </div>
@@ -276,9 +276,9 @@ export default function HeadhuntingPage() {
             </ScrollArea>
 
             {/* Input Area */}
-            <div className="p-6 border-t flex-shrink-0 bg-background">
+            <div className="p-4 border-t-2 flex-shrink-0 bg-background">
               {searchHistory.length > 0 && (
-                <div className="mb-3 flex justify-end">
+                <div className="mb-2 flex justify-end">
                   <Button
                     variant="ghost"
                     size="sm"
@@ -288,7 +288,7 @@ export default function HeadhuntingPage() {
                   </Button>
                 </div>
               )}
-              <div className="flex gap-2">
+              <div className="flex gap-3">
                 <Input
                   placeholder="Describe the candidate you're looking for..."
                   value={searchQuery}
@@ -300,12 +300,13 @@ export default function HeadhuntingPage() {
                     }
                   }}
                   disabled={loading}
-                  className="flex-1"
+                  className="flex-1 border-2"
                 />
                 <Button
                   onClick={handleSearch}
                   disabled={!searchQuery.trim() || loading}
                   size="icon"
+                  className="border-2"
                 >
                   {loading ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
@@ -314,7 +315,7 @@ export default function HeadhuntingPage() {
                   )}
                 </Button>
               </div>
-              <p className="text-xs text-muted-foreground mt-2">
+              <p className="text-xs text-muted-foreground mt-1.5">
                 Press Enter to search • Uses AI-powered semantic matching across resumes and GitHub portfolios
               </p>
             </div>
@@ -323,8 +324,8 @@ export default function HeadhuntingPage() {
       </div>
 
       {/* Tips Sidebar */}
-      <div className="w-80 space-y-4">
-        <Card>
+      <div className="w-80 space-y-4 flex-shrink-0">
+        <Card className="border-2">
           <CardHeader>
             <CardTitle className="text-sm">Search Tips</CardTitle>
           </CardHeader>
@@ -350,7 +351,7 @@ export default function HeadhuntingPage() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="border-2">
           <CardHeader>
             <CardTitle className="text-sm">Example Queries</CardTitle>
           </CardHeader>

@@ -148,6 +148,37 @@ async def get_student_resume(student_id: str):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.delete("/student/{student_id}")
+async def delete_student_resume_embeddings(student_id: str):
+    """
+    Delete resume embeddings for a specific student.
+    This should be called when a student removes their resume.
+    """
+    try:
+        print(f"[Delete] Attempting to delete resume embeddings for student_id: {student_id}")
+        
+        success = VectorStore.delete_resume_embedding(student_id)
+        
+        if success:
+            print(f"[Delete] Successfully deleted resume embeddings for student_id: {student_id}")
+            return {
+                "success": True,
+                "message": f"Resume embeddings deleted for student {student_id}"
+            }
+        else:
+            raise HTTPException(
+                status_code=500, 
+                detail="Failed to delete resume embeddings"
+            )
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[Delete] Error deleting resume embeddings: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
     
 # example usage 
 @router.post("/search")

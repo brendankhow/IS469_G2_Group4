@@ -163,7 +163,7 @@ export default function StudentDashboardPage() {
     router.push(`/student/cover-letters?jobs=${selectedJobs.join(",")}`)
   }
 
-  const handleGetFeedback = async () => {
+  const handleGetFeedback = async (forceRefresh = false) => {
     if (!currentUserId) {
       toast({
         title: "Error",
@@ -173,6 +173,17 @@ export default function StudentDashboardPage() {
       return
     }
 
+    // Check if we have cached feedback in session storage and not forcing refresh
+    if (!forceRefresh) {
+      const cachedFeedback = sessionStorage.getItem('resumeFeedback')
+      if (cachedFeedback) {
+        setFeedback(cachedFeedback)
+        setFeedbackOpen(true)
+        return
+      }
+    }
+
+    // If no cache or forcing refresh, fetch new feedback
     setLoadingFeedback(true)
     setFeedbackOpen(true)
     setFeedback(null)
@@ -187,18 +198,33 @@ export default function StudentDashboardPage() {
       })
 
       if (!response.ok) {
-        throw new Error("Failed to get feedback")
+        const errorData = await response.json().catch(() => ({}))
+        const errorMessage = errorData.detail || "Failed to get feedback"
+        
+        // Show error in the feedback dialog instead of closing it
+        setFeedback(`## ⚠️ Error\n\n**Unable to generate feedback at this time.**\n\n${errorMessage}\n\n**Possible reasons:**\n- Your resume may not have been processed yet. Please try uploading it again from your profile.\n- The AI service may be temporarily unavailable.\n\n**What to do:**\n1. Go to your Profile page\n2. Re-upload your resume\n3. Wait a few moments for processing\n4. Try again\n\nIf the problem persists, please contact support.`)
+        
+        toast({
+          title: "Error",
+          description: "Failed to generate feedback. Please try again later.",
+          variant: "destructive",
+        })
+        return
       }
 
       const data = await response.json()
       setFeedback(data.feedback)
+      // Store feedback in session storage
+      sessionStorage.setItem('resumeFeedback', data.feedback)
     } catch (error) {
+      // Network or other errors
+      setFeedback(`## ⚠️ Connection Error\n\n**Unable to reach the feedback service.**\n\nPlease check your internet connection and try again later.\n\nIf the problem persists, please contact support.`)
+      
       toast({
         title: "Error",
-        description: "Failed to generate feedback. Please try again.",
+        description: "Failed to generate feedback. Please try again later.",
         variant: "destructive",
       })
-      setFeedbackOpen(false)
     } finally {
       setLoadingFeedback(false)
     }
@@ -294,7 +320,7 @@ export default function StudentDashboardPage() {
           </Badge>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={handleGetFeedback}>
+          <Button variant="outline" onClick={() => handleGetFeedback(false)}>
             <FileText className="mr-2 h-4 w-4" />
             Get Resume Feedback
           </Button>
@@ -367,27 +393,54 @@ export default function StudentDashboardPage() {
 
       {/* Feedback Dialog */}
       <Dialog open={feedbackOpen} onOpenChange={setFeedbackOpen}>
-        <DialogContent className="max-w-3xl max-h-[80vh]">
+        <DialogContent className="max-w-5xl max-h-[90vh]">
           <DialogHeader>
             <DialogTitle>Resume Feedback</DialogTitle>
             <DialogDescription>
               AI-powered analysis of your resume
             </DialogDescription>
           </DialogHeader>
-          <ScrollArea className="h-[60vh] pr-4">
+          <ScrollArea className="h-[70vh] pr-4">
             {loadingFeedback ? (
               <div className="flex items-center justify-center py-12">
                 <Loader2 className="h-8 w-8 animate-spin text-primary" />
                 <span className="ml-3 text-muted-foreground">Analyzing your resume...</span>
               </div>
             ) : feedback ? (
-              <div className="prose prose-sm dark:prose-invert max-w-none">
-                <ReactMarkdown>{feedback}</ReactMarkdown>
+              <div className="prose prose-sm dark:prose-invert max-w-none space-y-4">
+                <ReactMarkdown
+                  components={{
+                    h1: ({ node, ...props }) => <h1 className="mt-6 mb-3" {...props} />,
+                    h2: ({ node, ...props }) => <h2 className="mt-6 mb-3" {...props} />,
+                    h3: ({ node, ...props }) => <h3 className="mt-5 mb-2" {...props} />,
+                    h4: ({ node, ...props }) => <h4 className="mt-4 mb-2" {...props} />,
+                    p: ({ node, ...props }) => <p className="mb-3" {...props} />,
+                    ul: ({ node, ...props }) => <ul className="mb-3 space-y-1" {...props} />,
+                    ol: ({ node, ...props }) => <ol className="mb-3 space-y-1" {...props} />,
+                  }}
+                >
+                  {feedback}
+                </ReactMarkdown>
               </div>
             ) : (
               <p className="text-muted-foreground">No feedback available</p>
             )}
           </ScrollArea>
+          {!loadingFeedback && feedback && (
+            <div className="flex justify-end gap-2 pt-4 border-t">
+              <Button
+                variant="outline"
+                onClick={() => handleGetFeedback(true)}
+                disabled={loadingFeedback}
+              >
+                <FileText className="mr-2 h-4 w-4" />
+                Reanalyze Resume
+              </Button>
+              <Button onClick={() => setFeedbackOpen(false)}>
+                Close
+              </Button>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>
