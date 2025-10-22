@@ -121,9 +121,9 @@ export default function HeadhuntingPage() {
           
           <CardContent className="flex-1 flex flex-col p-0 min-h-0 overflow-hidden">
             {/* Chat History */}
-            <ScrollArea className="flex-1 p-8 overflow-y-auto">
+            <ScrollArea className="flex-1 p-8 overflow-y-auto h-full">
               {searchHistory.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-full text-center space-y-4">
+                <div className="flex flex-col items-center justify-center h-full text-center space-y-4 min-h-[400px]">
                   <Search className="h-16 w-16 text-muted-foreground/50" />
                   <div className="space-y-2">
                     <h3 className="text-lg font-semibold">Start Your Search</h3>
