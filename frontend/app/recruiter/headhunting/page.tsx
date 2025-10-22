@@ -105,7 +105,7 @@ export default function HeadhuntingPage() {
   }
 
   return (
-    <div className="flex h-[calc(100vh-2rem)] overflow-hidden p-4 gap-6">
+    <div className="flex h-[calc(100vh-2rem)] overflow-hidden p-2 gap-6">
       {/* Main Chat Area */}
       <div className="flex-1 flex flex-col h-full">
         <Card className="flex-1 flex flex-col h-full overflow-hidden border-2">
@@ -191,17 +191,6 @@ export default function HeadhuntingPage() {
                                             <Star className="h-3 w-3 mr-1" />
                                             Fit Score: {candidate.fit_score}%
                                           </Badge>
-                                          {candidate.github_link && (
-                                            <a
-                                              href={candidate.github_link}
-                                              target="_blank"
-                                              rel="noopener noreferrer"
-                                              className="text-xs text-muted-foreground hover:text-primary flex items-center gap-1"
-                                            >
-                                              <Github className="h-3 w-3" />
-                                              GitHub
-                                            </a>
-                                          )}
                                         </div>
                                       </div>
                                     </div>
@@ -210,7 +199,7 @@ export default function HeadhuntingPage() {
                                     {candidate.evaluation_bullets.length > 0 && (
                                       <div>
                                         <p className="text-xs font-medium text-muted-foreground mb-2">Evaluation</p>
-                                        <ul className="text-sm space-y-1.5 list-disc list-inside">
+                                        <ul className="text-sm space-y-1.5">
                                           {candidate.evaluation_bullets.map((bullet, bulletIndex) => (
                                             <li key={bulletIndex}>{bullet}</li>
                                           ))}
@@ -234,13 +223,26 @@ export default function HeadhuntingPage() {
                                       <p className="text-xs font-medium text-muted-foreground mb-2">Recommended Next Step</p>
                                       <p className="text-sm">{candidate.next_step}</p>
                                     </div>
-                                    {candidate.candidate_link && (
-                                      <Button variant="outline" size="sm" className="w-full border-2" asChild>
-                                        <a href={candidate.candidate_link} target="_blank" rel="noopener noreferrer">
-                                          View Full Profile
-                                        </a>
-                                      </Button>
-                                    )}
+                                    
+                                    {/* Links Section */}
+                                    <div className="pt-3 border-t-2 space-y-2">
+                                      {candidate.github_link && candidate.github_link !== "N/A" && (
+                                        <Button variant="outline" size="sm" className="w-full border-2" asChild>
+                                          <a href={candidate.github_link} target="_blank" rel="noopener noreferrer">
+                                            <Github className="h-4 w-4 mr-2" />
+                                            View GitHub Profile
+                                          </a>
+                                        </Button>
+                                      )}
+                                      {candidate.candidate_link && (
+                                        <Button variant="default" size="sm" className="w-full border-2" asChild>
+                                          <a href={candidate.candidate_link} target="_blank" rel="noopener noreferrer">
+                                            <ExternalLink className="h-4 w-4 mr-2" />
+                                            View Full Profile
+                                          </a>
+                                        </Button>
+                                      )}
+                                    </div>
                                   </CardContent>
                                 </Card>
                               ))}

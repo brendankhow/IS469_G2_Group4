@@ -55,3 +55,25 @@ def build_portfolio(request: GitHubPortfolioRequest):
     print(f"Stored documents in vector store.")
     
     return GitHubPortfolioResponse(documents=documents)
+
+@router.delete("/student/{student_id}")
+async def delete_github_embeddings(student_id: str):
+    """
+    Delete all GitHub embeddings for a specific student.
+    This should be called when a student removes their GitHub username from profile.
+    """
+    try:
+        print(f"[GitHub Delete] Attempting to delete GitHub embeddings for student_id: {student_id}")
+        
+        count = VectorStore.delete_student_github_repos(student_id)
+        
+        print(f"[GitHub Delete] Successfully deleted {count} GitHub embeddings for student_id: {student_id}")
+        return {
+            "success": True,
+            "message": f"Deleted {count} GitHub embedding(s) for student {student_id}",
+            "count": count
+        }
+    
+    except Exception as e:
+        print(f"[GitHub Delete] Error deleting GitHub embeddings: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))

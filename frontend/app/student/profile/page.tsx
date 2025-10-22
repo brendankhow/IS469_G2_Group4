@@ -33,6 +33,7 @@ export default function ProfilePage() {
   const [currentResumeUrl, setCurrentResumeUrl] = useState<string | null>(null)
   const [pdfViewerOpen, setPdfViewerOpen] = useState(false)
   const [githubError, setGithubError] = useState<string | null>(null)
+  const [previousGithubUsername, setPreviousGithubUsername] = useState<string | null>(null)
 
   // Check if all mandatory fields are filled
   const isFormValid = () => {
@@ -58,6 +59,10 @@ export default function ProfilePage() {
       // Set the current resume URL from the profile data
       if (data.user?.resume_url) {
         setCurrentResumeUrl(data.user.resume_url)
+      }
+      // Store the current GitHub username to detect changes
+      if (data.user?.github_username) {
+        setPreviousGithubUsername(data.user.github_username)
       }
     } catch (error) {
       toast({
@@ -143,6 +148,38 @@ export default function ProfilePage() {
       
       setGithubError(null) // Clear any previous GitHub errors before processing
       
+      // Check if GitHub username was removed (previous had value, now empty)
+      const githubWasRemoved = previousGithubUsername && !profile.github_username?.trim()
+      
+      // If GitHub username was removed, delete the embeddings
+      if (githubWasRemoved) {
+        try {
+          const deleteResponse = await fetch(
+            `http://localhost:8000/github/student/${studentId}`,
+            {
+              method: "DELETE",
+            }
+          )
+
+          if (deleteResponse.ok) {
+            const deleteData = await deleteResponse.json()
+            console.log(`Deleted ${deleteData.count} GitHub embeddings`)
+            toast({
+              title: "GitHub Data Removed",
+              description: "Your GitHub portfolio data has been removed from our system.",
+            })
+          } else {
+            console.error("Failed to delete GitHub embeddings")
+          }
+        } catch (deleteError) {
+          console.error("Error deleting GitHub embeddings:", deleteError)
+          // Don't show error to user - this is a background cleanup
+        }
+        
+        // Clear the previous username tracking
+        setPreviousGithubUsername(null)
+      }
+      
       // If GitHub username is provided, process GitHub portfolio
       if (profile.github_username?.trim()) {
         try {
@@ -178,6 +215,8 @@ export default function ProfilePage() {
               title: "GitHub Profile Processed",
               description: "Your GitHub repositories have been analyzed and stored.",
             })
+            // Update the previous username after successful processing
+            setPreviousGithubUsername(profile.github_username.trim())
           }
         } catch (githubError) {
           console.error('GitHub processing error:', githubError)
