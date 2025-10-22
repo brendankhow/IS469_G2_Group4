@@ -1,6 +1,8 @@
 from typing import List, Dict, Optional
 from llama_index.core.indices.property_graph import PropertyGraphIndex
 from llama_index.core.schema import Document as LlamaDocument
+from llama_index.core import Settings
+from llama_index.core.indices.property_graph import ImplicitPathExtractor
 import logging
 
 from .vector_store import VectorStore
@@ -28,6 +30,7 @@ class GraphRAGService:
             PropertyGraphIndex or None if no documents found
         """
         try:
+            Settings.llm = None
             logger.info("Fetching all candidate documents from Supabase...")
             documents_data = VectorStore.get_all_candidates_documents()
 
@@ -61,9 +64,9 @@ class GraphRAGService:
             # build PropertyGraph - this generates embeddings internally
             index = PropertyGraphIndex.from_documents(
                 documents,
-                llm=custom_llm,
                 embed_model=custom_embed_model,
                 show_progress=True,
+                kg_extractors=[ImplicitPathExtractor()]
             )
 
             logger.info("Storing graph nodes in Supabase...")

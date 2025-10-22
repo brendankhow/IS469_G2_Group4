@@ -15,7 +15,7 @@ class CustomRAGEmbedder(BaseEmbedding):
         """Private method for getting text embedding."""
         return embedder.generate_embedding(text)
     
-    def _get_text_embeddings(self, texts: List[str]) -> List[List[float]]:
+    def get_text_embeddings(self, texts: List[str]) -> List[List[float]]:
         """Private method for getting batch embeddings."""
         return embedder.generate_embeddings_batch(texts)
     

@@ -408,21 +408,26 @@ class VectorStore:
         Search for relevant graph nodes (chunks/entities) globally across all students.
         Optional filters can restrict results by skills, roles, or other metadata.
         """
+
         params = {
             "query_embedding": query_embedding,
             "match_threshold": threshold,
             "match_count": top_k
         }
 
+        # Handle optional filters (filter_skill and filter_role)
         if filters:
-            params.update(filters)
-
+            if 'filter_skill' in filters:
+                 params['filter_skill'] = filters['filter_skill']
+            if 'filter_role' in filters:
+                 params['filter_role'] = filters['filter_role']
+            
         try:
+            print(f"Executing RPC match_graph_nodes with params: {list(params.keys())}")
             response = supabase.rpc("match_graph_nodes", params).execute()
             return response.data
         except Exception as e:
             print(f"Warning: match_graph_nodes RPC failed: {e}")
-            # Fallback: return empty list if RPC fails
             return []
 
     @staticmethod
