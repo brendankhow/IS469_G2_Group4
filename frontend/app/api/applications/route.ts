@@ -2,6 +2,9 @@ import { type NextRequest, NextResponse } from 'next/server'
 import { ApplicationsService } from '@/lib/services/applications.service'
 import { AuthService } from '@/lib/services/auth.service'
 import { StorageService } from '@/lib/services/storage.service'
+import { JobsService } from '@/lib/services/jobs.service'
+import { EmailService } from '@/lib/email-service'
+import { createClient } from '@/lib/supabase/server'
 
 export async function GET() {
   try {
@@ -112,9 +115,91 @@ export async function POST(request: NextRequest) {
     }
 
     console.log('✅ Application created successfully:', application)
+
+    // Send emails (don't wait for them to complete)
+    sendApplicationEmails(application.id, jobId, currentUser.id, coverLetter, finalResumeUrl)
+      .catch(error => console.error('Error sending application emails:', error))
+
     return NextResponse.json({ application }, { status: 201 })
   } catch (error) {
     console.error('🔴 Create application error:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+  }
+}
+
+/**
+ * Send application confirmation and notification emails
+ * Runs asynchronously to not block the response
+ */
+async function sendApplicationEmails(
+  applicationId: string,
+  jobId: string,
+  studentId: string,
+  coverLetter: string | null,
+  resumeUrl: string | undefined
+) {
+  try {
+    console.log('📧 Starting to send application emails...')
+    
+    const supabase = await createClient()
+    
+    // Fetch student details
+    const { data: student, error: studentError } = await supabase
+      .from('profiles')
+      .select('name, email')
+      .eq('id', studentId)
+      .single()
+    
+    if (studentError || !student) {
+      console.error('Error fetching student details:', studentError)
+      return
+    }
+
+    // Fetch job details including recruiter
+    const job = await JobsService.getById(jobId)
+    
+    if (!job) {
+      console.error('Error fetching job details')
+      return
+    }
+
+    // Fetch recruiter details
+    const { data: recruiter, error: recruiterError } = await supabase
+      .from('profiles')
+      .select('name, email')
+      .eq('id', job.recruiter_id)
+      .single()
+    
+    if (recruiterError || !recruiter) {
+      console.error('Error fetching recruiter details:', recruiterError)
+      return
+    }
+
+    // Send confirmation email to student
+    console.log('📧 Sending confirmation email to student...')
+    await EmailService.sendApplicationConfirmation(
+      student.email,
+      student.name || 'Applicant',
+      job.title,
+      'HireAI Company', // You can add company field to job table if needed
+      coverLetter || 'No cover letter provided',
+      resumeUrl
+    )
+
+    // Send notification email to recruiter
+    console.log('📧 Sending notification email to recruiter...')
+    await EmailService.sendRecruiterNotification(
+      recruiter.email,
+      recruiter.name || 'Recruiter',
+      student.name || 'Applicant',
+      student.email,
+      job.title,
+      coverLetter || 'No cover letter provided',
+      resumeUrl
+    )
+
+    console.log('✅ All application emails sent successfully')
+  } catch (error) {
+    console.error('❌ Error in sendApplicationEmails:', error)
   }
 }
