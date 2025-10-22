@@ -350,3 +350,137 @@ class VectorStore:
         ).execute()
         
         return response.data
+
+    # ========== graphRAG methods ==========
+
+    @staticmethod
+    def store_graph_node(
+        node_id: str,
+        student_id: str,
+        text: str,
+        embedding: List[float],
+        metadata: Optional[Dict] = None
+    ) -> Dict:
+        """
+        Store a single graph node (entity or chunk) with embedding and metadata.
+        Each node should have a student_id so recruiters know which candidate it belongs to.
+        """
+        data = {
+            "node_id": node_id,
+            "student_id": student_id,
+            "text": text,
+            "embedding": embedding,
+            "metadata": metadata or {}
+        }
+        response = supabase.table("graphrag_portfolio").insert(data).execute()
+        return response.data[0]
+
+    @staticmethod
+    def store_graph_nodes_batch(
+        nodes: List[Dict]
+    ) -> List[Dict]:
+        """
+        Store multiple graph nodes in a single batch insert.
+        Each node dictionary must include 'id', 'text', 'embedding', and optionally 'student_id' and 'metadata'.
+        """
+        data_batch = [
+            {
+                "node_id": node["id"],
+                "student_id": node.get("student_id", "unknown"),
+                "text": node["text"],
+                "embedding": node["embedding"],
+                "metadata": node.get("metadata", {})
+            }
+            for node in nodes
+        ]
+        response = supabase.table("graphrag_portfolio").insert(data_batch).execute()
+        print(f"Stored {len(response.data)} GraphRAG nodes in graphrag_portfolio")
+        return response.data
+
+    @staticmethod
+    def search_graph_nodes(
+        query_embedding: List[float],
+        top_k: int = 10,
+        threshold: float = 0.5,
+        filters: Optional[Dict] = None  # optional metadata filters for recruiter queries
+    ) -> List[Dict]:
+        """
+        Search for relevant graph nodes (chunks/entities) globally across all students.
+        Optional filters can restrict results by skills, roles, or other metadata.
+        """
+        params = {
+            "query_embedding": query_embedding,
+            "match_threshold": threshold,
+            "match_count": top_k
+        }
+
+        if filters:
+            params.update(filters)
+
+        try:
+            response = supabase.rpc("match_graph_nodes", params).execute()
+            return response.data
+        except Exception as e:
+            print(f"Warning: match_graph_nodes RPC failed: {e}")
+            # Fallback: return empty list if RPC fails
+            return []
+
+    @staticmethod
+    def delete_graph_nodes(student_id: Optional[str] = None) -> int:
+        """
+        Delete GraphRAG nodes.
+        If student_id is provided, deletes only that student's nodes.
+        Otherwise, deletes all nodes (use with caution!).
+        """
+        query = supabase.table("graphrag_portfolio").delete()
+        if student_id:
+            query = query.eq("student_id", student_id)
+        response = query.execute()
+        count = len(response.data) if response.data else 0
+        if student_id:
+            print(f"Deleted {count} GraphRAG nodes for student {student_id}")
+        else:
+            print(f"Deleted {count} GraphRAG nodes globally")
+        return count
+
+    @staticmethod
+    def get_all_candidates_documents() -> List[Dict]:
+        """
+        Get all candidate documents (resumes and GitHub repos) for GraphRAG indexing.
+        Returns documents in a format compatible with GraphRAG processing.
+        """
+        all_documents = []
+        
+        # get all resume documents
+        resume_response = supabase.table("resume_embeddings")\
+            .select("student_id, resume_text, filename")\
+            .execute()
+        
+        for resume in resume_response.data:
+            all_documents.append({
+                "doc_id": f"resume_{resume['student_id']}",
+                "student_id": resume['student_id'],
+                "text": resume['resume_text'],
+                "source": "resume",
+                "filename": resume.get('filename', 'unknown')
+            })
+        
+        # get all github documents
+        github_response = supabase.table("github_embeddings")\
+            .select("student_id, document_id, text, repo_name, metadata")\
+            .execute()
+        
+        for github_doc in github_response.data:
+            all_documents.append({
+                "doc_id": github_doc['document_id'],
+                "student_id": github_doc['student_id'],
+                "text": github_doc['text'],
+                "source": "github",
+                "repo_name": github_doc.get('repo_name', 'unknown')
+            })
+        
+        print(f"Retrieved {len(all_documents)} total documents for GraphRAG indexing")
+        print(f"  - Resumes: {len(resume_response.data)}")
+        print(f"  - GitHub docs: {len(github_response.data)}")
+        
+        return all_documents
