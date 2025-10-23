@@ -244,6 +244,7 @@ class VectorStore:
         print(f"Deleted {count} GitHub documents for student {student_id}")
         return count
     
+    # TODO: EITHER FIX OR DELETE THIS METHOD
     @staticmethod
     def get_student_portfolio_summary(student_id: str) -> Dict:
         """
@@ -272,18 +273,9 @@ class VectorStore:
                 "total_stars": 0
             }
         except Exception as e:
-            print(f"Error getting portfolio summary: {str(e)}")
+            print(f"Error getting portfolio summary but no worries fallback method is being called yay: {str(e)}")
             # Fall back to querying the tables directly
             return VectorStore._get_portfolio_summary_fallback(student_id)
-        
-        return {
-            "student_name": None,
-            "github_username": None,
-            "total_repos": 0,
-            "total_resume_chunks": 0,
-            "top_languages": [],
-            "total_stars": 0
-        }
     
     @staticmethod
     def _get_portfolio_summary_fallback(student_id: str) -> Dict:
