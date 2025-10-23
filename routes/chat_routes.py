@@ -51,7 +51,7 @@ def chat(request: ChatRequest):
         matches = VectorStore.search_similar_resumes(
             query_embedding=query_embedding,
             top_k=5,
-            threshold=0.0
+            threshold=0.1
         )
 
         if not matches:
@@ -130,7 +130,7 @@ def chat(request: ChatRequest):
                 "skills": profile.get("skills", "N/A"),
                 "github_username": github_username,
                 "resume_similarity": m.get("similarity", 0.0),
-                "resume_excerpt": m.get("resume_text", "")[:600],
+                "resume_excerpt": m.get("resume_text", ""),
                 "github_projects": github_projects,
                 "portfolio_summary": portfolio_summary  # Add portfolio overview
             })
@@ -152,11 +152,28 @@ def chat(request: ChatRequest):
             if c.get('portfolio_summary'):
                 ps = c['portfolio_summary']
                 candidate_info.append("\n📊 GitHub Portfolio Overview:")
-                candidate_info.append(f"  Total Repos: {ps.get('total_repos', 0)} | Stars: {ps.get('total_stars', 0)} | Active Days: {ps.get('days_active', 0)}")
-                if ps.get('top_languages'):
-                    candidate_info.append(f"  Top Languages: {', '.join(ps['top_languages'][:5])}")
-                if ps.get('technical_areas'):
-                    candidate_info.append(f"  Technical Focus: {', '.join(ps['technical_areas'][:5])}")
+                
+                # Quick summary
+                if ps.get('quick_summary'):
+                    candidate_info.append(f"  Summary: {ps.get('quick_summary')}")
+                
+                # Technical identity
+                if ps.get('technical_identity'):
+                    candidate_info.append(f"  Technical Identity: {ps.get('technical_identity')}")
+                
+                # Key skills
+                if ps.get('key_skills'):
+                    candidate_info.append(f"  Key Skills: {', '.join(ps['key_skills'])}")
+                
+                # Standout projects
+                if ps.get('standout_projects'):
+                    candidate_info.append(f"  Standout Projects: {', '.join(ps['standout_projects'])}")
+                
+                # Job readiness
+                if ps.get('job_readiness'):
+                    readiness_emoji = "✅" if ps['job_readiness'] == "ready" else "🔄" if ps['job_readiness'] == "nearly_ready" else "⚠️"
+                    candidate_info.append(f"  Job Readiness: {readiness_emoji} {ps['job_readiness'].replace('_', ' ').title()}")
+            
             
             # Add GitHub projects if available
             if c['github_projects']:
@@ -167,7 +184,7 @@ def chat(request: ChatRequest):
                         f"[Match: {proj['similarity']:.2f}]"
                     )
                     candidate_info.append(f"    Topics: {', '.join(proj['topics'][:3])}")
-                    candidate_info.append(f"    {proj['description']}")
+                    candidate_info.append(f"    {proj['description'][:200]}")
             
             rag_context_parts.append("\n".join(candidate_info))
         
@@ -180,8 +197,8 @@ def chat(request: ChatRequest):
 
             For each candidate provide:
             (1) Fit score (0-10) - consider both resume AND GitHub projects with portfolio analysis
-            (2) 2-3 bullets tying their experience/projects/skills to the job requirements
-                • [Bullet 1: Tie specific experience to job requirement]
+            (2) 3 bullets tying their experience/projects/skills to the job requirements
+                • [Bullet 1: Tie specific experience to job requirement and provide evidence from the resume to support your claim]
                 • [Bullet 2: Highlight relevant skills or projects with technical evidence]
                 • [Bullet 3: Note any standout achievements or portfolio insights]
             (3) Notable GitHub projects that demonstrate relevant skills (use project analysis data)
