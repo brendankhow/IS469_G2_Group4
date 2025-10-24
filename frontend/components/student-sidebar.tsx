@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { Briefcase, FileText, User, Home, Sparkles, LogOut } from "lucide-react"
+import { Briefcase, FileText, User, Home, Sparkles, LogOut, Bot } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { useState } from "react"
 
@@ -45,6 +45,7 @@ export function StudentSidebar() {
   const navItems = [
     { href: "/student/dashboard", icon: Briefcase, label: "Job Search" },
     { href: "/student/applications", icon: FileText, label: "My Applications" },
+    { href: "/student/interview-assistant", icon: Bot, label: "Interview Assistant" },
     { href: "/student/profile", icon: User, label: "Profile" },
   ]
 

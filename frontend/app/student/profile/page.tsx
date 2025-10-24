@@ -2,7 +2,7 @@
 
 import type React from "react";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,26 +14,13 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetDescription,
-} from "@/components/ui/sheet";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import {
   Loader2,
   Upload,
   Eye,
   Trash2,
-  Bot,
-  User,
-  Send,
-  Sparkles,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { PDFViewerModal } from "@/components/pdf-viewer-modal";
-import ReactMarkdown from "react-markdown";
 
 interface UserProfile {
   id: number;
@@ -45,12 +32,6 @@ interface UserProfile {
   skills?: string;
   github_username?: string;
   tiktok_handle?: string;
-}
-
-interface ChatMessage {
-  role: "user" | "assistant";
-  content: string;
-  timestamp: Date;
 }
 
 export default function ProfilePage() {
@@ -67,13 +48,6 @@ export default function ProfilePage() {
     string | null
   >(null);
 
-  // Chat state
-  const [chatOpen, setChatOpen] = useState(false);
-  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
-  const [currentMessage, setCurrentMessage] = useState("");
-  const [sendingMessage, setSendingMessage] = useState(false);
-  const chatScrollRef = useRef<HTMLDivElement>(null);
-
   // Check if all mandatory fields are filled
   const isFormValid = () => {
     if (!profile) return false;
@@ -89,17 +63,6 @@ export default function ProfilePage() {
   useEffect(() => {
     fetchProfile();
   }, []);
-
-  useEffect(() => {
-    if (chatScrollRef.current) {
-      const scrollContainer = chatScrollRef.current.querySelector(
-        "[data-radix-scroll-area-viewport]"
-      );
-      if (scrollContainer) {
-        scrollContainer.scrollTop = scrollContainer.scrollHeight;
-      }
-    }
-  }, [chatMessages, sendingMessage]);
 
   const fetchProfile = async () => {
     try {
@@ -483,78 +446,6 @@ export default function ProfilePage() {
     }
   };
 
-  const handleOpenChat = () => {
-    if (!profile) return;
-
-    // Initialize chat with welcome message
-    setChatMessages([
-      {
-        role: "assistant",
-        content: `Hi ${
-          profile.name || "there"
-        }! I'm your AI digital twin. I can answer questions about your skills, experience, projects, and help you prepare for interviews. What would you like to know?`,
-        timestamp: new Date(),
-      },
-    ]);
-    setChatOpen(true);
-  };
-
-  const handleSendMessage = async () => {
-    if (!currentMessage.trim() || !profile) return;
-
-    const userMessage: ChatMessage = {
-      role: "user",
-      content: currentMessage,
-      timestamp: new Date(),
-    };
-
-    setChatMessages((prev) => [...prev, userMessage]);
-    setCurrentMessage("");
-    setSendingMessage(true);
-
-    try {
-      const response = await fetch("http://localhost:8000/student/chatbot", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          student_id: profile.id.toString(),
-          message: userMessage.content,
-          temperature: 0.7,
-          conversation_history: chatMessages.slice(-4).map((msg) => ({
-            role: msg.role,
-            content: msg.content,
-          })),
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to get response");
-      }
-
-      const data = await response.json();
-
-      const aiMessage: ChatMessage = {
-        role: "assistant",
-        content: data.response || "No response received",
-        timestamp: new Date(),
-      };
-
-      setChatMessages((prev) => [...prev, aiMessage]);
-    } catch (error) {
-      console.error("Chat error:", error);
-      const errorMessage: ChatMessage = {
-        role: "assistant",
-        content: "Sorry, I couldn't process your message. Please try again.",
-        timestamp: new Date(),
-      };
-      setChatMessages((prev) => [...prev, errorMessage]);
-    } finally {
-      setSendingMessage(false);
-    }
-  };
-
   if (loading) {
     return (
       <div className="flex h-screen items-center justify-center">
@@ -570,7 +461,7 @@ export default function ProfilePage() {
         <p className="text-muted-foreground">Manage your account information</p>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-3">
+      <div className="grid gap-6 lg:grid-cols-2">
         <Card>
           <CardHeader>
             <CardTitle>Personal Information</CardTitle>
@@ -755,142 +646,7 @@ export default function ProfilePage() {
             )}
           </CardContent>
         </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Bot className="h-5 w-5 text-primary" />
-              AI Interview Assistant
-            </CardTitle>
-            <CardDescription>
-              Practice interviews with your digital twin
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <p className="text-sm text-muted-foreground">
-                Chat with an AI version of yourself trained on your resume and
-                GitHub projects. Practice answering tough interview questions
-                and get personalized feedback.
-              </p>
-              <Button
-                onClick={handleOpenChat}
-                className="w-full"
-                disabled={!profile || !currentResumeUrl}
-              >
-                <Sparkles className="mr-2 h-4 w-4" />
-                Start Interview Practice
-              </Button>
-              {(!profile || !currentResumeUrl) && (
-                <p className="text-xs text-muted-foreground">
-                  Complete your profile and upload a resume to unlock the AI
-                  assistant
-                </p>
-              )}
-            </div>
-          </CardContent>
-        </Card>
       </div>
-
-      {/* Chat Sheet */}
-      <Sheet open={chatOpen} onOpenChange={setChatOpen}>
-        <SheetContent
-          side="right"
-          className="w-full sm:w-1/4 sm:max-w-none flex flex-col p-0"
-        >
-          <SheetHeader className="p-6 pb-4 border-b border-border">
-            <SheetTitle className="flex items-center gap-2">
-              <Bot className="h-5 w-5 text-primary" />
-              AI Interview Assistant
-            </SheetTitle>
-            <SheetDescription>
-              Practice with your digital twin - {profile?.name || "Student"}
-            </SheetDescription>
-          </SheetHeader>
-
-          <div className="flex-1 overflow-hidden" ref={chatScrollRef}>
-            <ScrollArea className="h-full p-6">
-              <div className="space-y-4">
-                {chatMessages.map((message, index) => (
-                  <div
-                    key={index}
-                    className={`flex gap-3 ${
-                      message.role === "user" ? "justify-end" : "justify-start"
-                    }`}
-                  >
-                    {message.role === "assistant" && (
-                      <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
-                        <Bot className="h-4 w-4 text-primary" />
-                      </div>
-                    )}
-                    <div
-                      className={`max-w-[80%] rounded-lg p-3 ${
-                        message.role === "user"
-                          ? "bg-primary text-primary-foreground"
-                          : "bg-secondary text-secondary-foreground"
-                      }`}
-                    >
-                      {message.role === "assistant" ? (
-                        <div className="text-sm prose prose-sm dark:prose-invert max-w-none">
-                          <ReactMarkdown>{message.content}</ReactMarkdown>
-                        </div>
-                      ) : (
-                        <p className="text-sm">{message.content}</p>
-                      )}
-                      <p className="text-xs mt-1 opacity-70">
-                        {message.timestamp.toLocaleTimeString([], {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
-                      </p>
-                    </div>
-                    {message.role === "user" && (
-                      <div className="flex-shrink-0 w-8 h-8 rounded-full bg-accent flex items-center justify-center">
-                        <User className="h-4 w-4 text-accent-foreground" />
-                      </div>
-                    )}
-                  </div>
-                ))}
-                {sendingMessage && (
-                  <div className="flex gap-3 justify-start">
-                    <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
-                      <Bot className="h-4 w-4 text-primary" />
-                    </div>
-                    <div className="bg-secondary text-secondary-foreground rounded-lg p-3">
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    </div>
-                  </div>
-                )}
-              </div>
-            </ScrollArea>
-          </div>
-
-          <div className="p-6 pt-4 border-t border-border">
-            <div className="flex gap-2">
-              <Input
-                placeholder="Ask about your experience, skills, or projects..."
-                value={currentMessage}
-                onChange={(e) => setCurrentMessage(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault();
-                    handleSendMessage();
-                  }
-                }}
-                disabled={sendingMessage}
-                className="flex-1"
-              />
-              <Button
-                onClick={handleSendMessage}
-                disabled={!currentMessage.trim() || sendingMessage}
-                size="icon"
-              >
-                <Send className="h-4 w-4" />
-              </Button>
-            </div>
-          </div>
-        </SheetContent>
-      </Sheet>
 
       {/* PDF Viewer Modal */}
       <PDFViewerModal

@@ -1,0 +1,361 @@
+"use client"
+
+import { useState, useEffect } from "react"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
+import { ScrollArea } from "@/components/ui/scroll-area"
+import { Loader2, Send, Bot, Sparkles, User, MessageSquare } from "lucide-react"
+import { useToast } from "@/hooks/use-toast"
+import ReactMarkdown from "react-markdown"
+
+interface ChatMessage {
+  role: "user" | "assistant"
+  content: string
+  timestamp: Date
+}
+
+interface UserProfile {
+  id: number
+  name?: string
+  resume_url?: string
+}
+
+export default function InterviewAssistantPage() {
+  const { toast } = useToast()
+  const [currentMessage, setCurrentMessage] = useState("")
+  const [chatHistory, setChatHistory] = useState<ChatMessage[]>([])
+  const [loading, setLoading] = useState(false)
+  const [profile, setProfile] = useState<UserProfile | null>(null)
+  const [profileLoading, setProfileLoading] = useState(true)
+
+  useEffect(() => {
+    fetchProfile()
+  }, [])
+
+  const fetchProfile = async () => {
+    try {
+      const response = await fetch("/api/auth/me")
+      const data = await response.json()
+      setProfile(data.user)
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to load profile",
+        variant: "destructive",
+      })
+    } finally {
+      setProfileLoading(false)
+    }
+  }
+
+  const handleSendMessage = async () => {
+    if (!currentMessage.trim() || !profile) return
+
+    // Add user message to history
+    const userMessage: ChatMessage = {
+      role: "user",
+      content: currentMessage,
+      timestamp: new Date(),
+    }
+    setChatHistory((prev) => [...prev, userMessage])
+    setCurrentMessage("")
+    setLoading(true)
+
+    try {
+      const response = await fetch("http://localhost:8000/student/chatbot", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          student_id: profile.id.toString(),
+          message: userMessage.content,
+          temperature: 0.7,
+          conversation_history: chatHistory.slice(-4).map((msg) => ({
+            role: msg.role,
+            content: msg.content,
+          })),
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to get response")
+      }
+
+      const data = await response.json()
+
+      const aiMessage: ChatMessage = {
+        role: "assistant",
+        content: data.response || "No response received",
+        timestamp: new Date(),
+      }
+
+      setChatHistory((prev) => [...prev, aiMessage])
+    } catch (error) {
+      console.error("Chat error:", error)
+      const errorMessage: ChatMessage = {
+        role: "assistant",
+        content: "Sorry, I couldn't process your message. Please try again.",
+        timestamp: new Date(),
+      }
+      setChatHistory((prev) => [...prev, errorMessage])
+      toast({
+        title: "Chat Failed",
+        description: "Failed to get response. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleClearHistory = () => {
+    setChatHistory([])
+    toast({
+      title: "History Cleared",
+      description: "Chat history has been cleared",
+    })
+  }
+
+  if (profileLoading) {
+    return (
+      <div className="flex h-[calc(100vh-2rem)] items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    )
+  }
+
+  const hasRequiredProfile = profile && profile.resume_url
+
+  return (
+    <div className="flex h-[calc(100vh-2rem)] overflow-hidden p-2 gap-6">
+      {/* Main Chat Area */}
+      <div className="flex-1 flex flex-col h-full">
+        <Card className="flex-1 flex flex-col h-full overflow-hidden border-2">
+          <CardHeader className="border-b-2 flex-shrink-0">
+            <CardTitle className="flex items-center gap-2">
+              <Bot className="h-5 w-5 text-primary" />
+              AI Interview Assistant
+            </CardTitle>
+            <CardDescription>
+              Practice interviews with your digital twin trained on your resume and GitHub portfolio
+            </CardDescription>
+          </CardHeader>
+          
+          <CardContent className="flex-1 flex flex-col p-0 min-h-0 overflow-hidden">
+            {!hasRequiredProfile ? (
+              <div className="flex flex-col items-center justify-center h-full text-center space-y-4 p-8">
+                <Bot className="h-16 w-16 text-muted-foreground/50" />
+                <div className="space-y-2">
+                  <h3 className="text-lg font-semibold">Complete Your Profile First</h3>
+                  <p className="text-sm text-muted-foreground max-w-md">
+                    To use the AI Interview Assistant, you need to upload your resume in your profile.
+                    This allows the AI to learn about your experience and provide personalized interview practice.
+                  </p>
+                </div>
+                <Button onClick={() => window.location.href = '/student/profile'}>
+                  Go to Profile
+                </Button>
+              </div>
+            ) : (
+              <>
+                {/* Chat History */}
+                <ScrollArea className="flex-1 p-8 overflow-y-auto h-full">
+                  {chatHistory.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center h-full text-center space-y-4 min-h-[400px]">
+                      <MessageSquare className="h-16 w-16 text-muted-foreground/50" />
+                      <div className="space-y-2">
+                        <h3 className="text-lg font-semibold">Start Your Interview Practice</h3>
+                        <p className="text-sm text-muted-foreground max-w-md">
+                          Ask your digital twin any interview questions. Practice answering questions about your experience, skills, and projects.
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap gap-2 justify-center max-w-2xl">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setCurrentMessage("Tell me about your most challenging project")}
+                        >
+                          Challenging Project
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setCurrentMessage("What are your key technical skills?")}
+                        >
+                          Technical Skills
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setCurrentMessage("Describe a time you solved a difficult problem")}
+                        >
+                          Problem Solving
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-6">
+                      {chatHistory.map((message, index) => (
+                        <div key={index} className="space-y-4">
+                          {message.role === "user" ? (
+                            <div className="flex justify-end">
+                              <div className="max-w-[85%] rounded-lg p-5 bg-primary text-primary-foreground shadow-md border-2 border-primary/20">
+                                <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                                <p className="text-xs mt-2 opacity-70">
+                                  {message.timestamp.toLocaleTimeString([], {
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                  })}
+                                </p>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="flex justify-start">
+                              <div className="max-w-[85%] space-y-2">
+                                <div className="bg-secondary rounded-lg p-5 border-2 shadow-sm">
+                                  <div className="prose prose-sm dark:prose-invert max-w-none prose-headings:font-bold prose-headings:mt-4 prose-headings:mb-2 prose-p:my-3 prose-p:leading-relaxed prose-strong:font-bold prose-strong:text-foreground prose-ul:my-3 prose-ol:my-3 prose-li:my-1">
+                                    <ReactMarkdown
+                                      components={{
+                                        strong: ({node, ...props}) => <strong className="font-bold text-foreground" {...props} />,
+                                        em: ({node, ...props}) => <em className="italic" {...props} />,
+                                        h1: ({node, ...props}) => <h1 className="text-xl font-bold mt-4 mb-2" {...props} />,
+                                        h2: ({node, ...props}) => <h2 className="text-lg font-bold mt-4 mb-2" {...props} />,
+                                        h3: ({node, ...props}) => <h3 className="text-base font-bold mt-3 mb-2" {...props} />,
+                                        p: ({node, ...props}) => <p className="my-3 leading-relaxed" {...props} />,
+                                        ul: ({node, ...props}) => <ul className="my-3 ml-4 list-disc" {...props} />,
+                                        ol: ({node, ...props}) => <ol className="my-3 ml-4 list-decimal" {...props} />,
+                                        li: ({node, ...props}) => <li className="my-1" {...props} />,
+                                      }}
+                                    >
+                                      {message.content}
+                                    </ReactMarkdown>
+                                  </div>
+                                </div>
+                                <p className="text-xs text-muted-foreground pl-2">
+                                  {message.timestamp.toLocaleTimeString([], {
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                  })}
+                                </p>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                      {loading && (
+                        <div className="flex justify-start">
+                          <div className="bg-secondary rounded-lg p-5 border-2 shadow-sm">
+                            <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </ScrollArea>
+
+                {/* Input Area */}
+                <div className="p-4 border-t-2 flex-shrink-0 bg-background">
+                  {chatHistory.length > 0 && (
+                    <div className="mb-2 flex justify-end">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={handleClearHistory}
+                      >
+                        Clear History
+                      </Button>
+                    </div>
+                  )}
+                  <div className="flex gap-3">
+                    <Input
+                      placeholder="Ask me about my experience, skills, or projects..."
+                      value={currentMessage}
+                      onChange={(e) => setCurrentMessage(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && !e.shiftKey) {
+                          e.preventDefault()
+                          handleSendMessage()
+                        }
+                      }}
+                      disabled={loading}
+                      className="flex-1 border-2"
+                    />
+                    <Button
+                      onClick={handleSendMessage}
+                      disabled={!currentMessage.trim() || loading}
+                      size="icon"
+                      className="border-2"
+                    >
+                      {loading ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Send className="h-4 w-4" />
+                      )}
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1.5">
+                    Press Enter to send • Your digital twin is trained on your resume and GitHub projects
+                  </p>
+                </div>
+              </>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Tips Sidebar */}
+      <div className="w-80 space-y-4 flex-shrink-0">
+        <Card className="border-2">
+          <CardHeader>
+            <CardTitle className="text-sm">Interview Tips</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3 text-sm">
+            <div>
+              <p className="font-medium">Be Specific</p>
+              <p className="text-xs text-muted-foreground">
+                Ask detailed questions about your projects and experiences
+              </p>
+            </div>
+            <div>
+              <p className="font-medium">Practice Common Questions</p>
+              <p className="text-xs text-muted-foreground">
+                Use typical interview questions to prepare better
+              </p>
+            </div>
+            <div>
+              <p className="font-medium">Review Your Responses</p>
+              <p className="text-xs text-muted-foreground">
+                Look back at the conversation to improve your answers
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-2">
+          <CardHeader>
+            <CardTitle className="text-sm">Example Questions</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2 text-xs">
+            <p className="text-muted-foreground">
+              • "Tell me about a challenging project you worked on"
+            </p>
+            <p className="text-muted-foreground">
+              • "What are your strongest technical skills?"
+            </p>
+            <p className="text-muted-foreground">
+              • "Describe a time when you had to learn a new technology quickly"
+            </p>
+            <p className="text-muted-foreground">
+              • "How do you approach problem-solving in your projects?"
+            </p>
+            <p className="text-muted-foreground">
+              • "What's your experience with [specific technology]?"
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  )
+}
