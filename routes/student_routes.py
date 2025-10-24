@@ -31,7 +31,7 @@ class ChatbotRequest(BaseModel):
     student_id: str
     message: str
     temperature: float = 0.7
-    # conversation_history: Optional[List[Dict[str, str]]] = None  # For multi-turn conversations    
+    conversation_history: Optional[List[Dict[str, str]]] = None  # For multi-turn conversations    
 
 @router.post("/feedback")
 async def get_resume_feedback(student_id: str = Form(...)):
