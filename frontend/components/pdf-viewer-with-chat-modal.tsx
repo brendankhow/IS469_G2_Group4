@@ -140,10 +140,26 @@ export function PDFViewerWithChatModal({
                       >
                         {message.role === "assistant" ? (
                           <div className="text-sm prose prose-sm dark:prose-invert max-w-none">
-                            <ReactMarkdown>{message.content}</ReactMarkdown>
+                            <ReactMarkdown
+                              components={{
+                                p: ({ children }) => <p className="mb-3 last:mb-0 leading-relaxed">{children}</p>,
+                                ul: ({ children }) => <ul className="my-3 ml-4 list-disc space-y-2">{children}</ul>,
+                                ol: ({ children }) => <ol className="my-3 ml-4 list-decimal space-y-2">{children}</ol>,
+                                li: ({ children }) => <li className="leading-relaxed">{children}</li>,
+                                strong: ({ children }) => <strong className="font-semibold text-primary">{children}</strong>,
+                                em: ({ children }) => <em className="italic">{children}</em>,
+                                code: ({ children }) => <code className="bg-muted px-1.5 py-0.5 rounded text-xs font-mono">{children}</code>,
+                                h1: ({ children }) => <h1 className="text-lg font-bold mb-2 mt-4 first:mt-0">{children}</h1>,
+                                h2: ({ children }) => <h2 className="text-base font-bold mb-2 mt-3 first:mt-0">{children}</h2>,
+                                h3: ({ children }) => <h3 className="text-sm font-bold mb-2 mt-3 first:mt-0">{children}</h3>,
+                                blockquote: ({ children }) => <blockquote className="border-l-2 border-primary pl-3 my-3 italic">{children}</blockquote>,
+                              }}
+                            >
+                              {message.content}
+                            </ReactMarkdown>
                           </div>
                         ) : (
-                          <p className="text-sm">{message.content}</p>
+                          <p className="text-sm whitespace-pre-wrap">{message.content}</p>
                         )}
                         <p className="text-xs mt-1 opacity-70">
                           {message.timestamp.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}

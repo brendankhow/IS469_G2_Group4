@@ -1,11 +1,12 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { Loader2, Send, Search, Sparkles, Star, Github, ExternalLink } from "lucide-react"
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet"
+import { Loader2, Send, Search, Sparkles, Star, Github, ExternalLink, MessageSquare, Bot, User, X } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import ReactMarkdown from "react-markdown"
 import { Badge } from "@/components/ui/badge"
@@ -18,6 +19,7 @@ interface CandidateResult {
   next_step: string
   github_link: string
   candidate_link: string
+  student_id?: string  // Added to track student ID for chat
 }
 
 interface SearchResult {
@@ -27,11 +29,131 @@ interface SearchResult {
   isUser: boolean
 }
 
+interface ChatMessage {
+  role: "user" | "assistant"
+  content: string
+  timestamp: Date
+}
+
+interface CandidateChatHistory {
+  [studentId: string]: {
+    messages: ChatMessage[]
+    expiresAt: number
+    candidateName: string
+  }
+}
+
+// LocalStorage utilities for chat history with expiry
+const CHAT_STORAGE_KEY = "headhunt_candidate_chats"
+const SEARCH_HISTORY_STORAGE_KEY = "headhunt_search_history"
+const CHAT_EXPIRY_MS = 60 * 60 * 1000 // 1 hour
+
+const loadChatHistory = (): CandidateChatHistory => {
+  if (typeof window === "undefined") return {}
+  
+  try {
+    const stored = localStorage.getItem(CHAT_STORAGE_KEY)
+    if (!stored) return {}
+    
+    const parsed: CandidateChatHistory = JSON.parse(stored)
+    const now = Date.now()
+    
+    // Filter out expired chats silently
+    const filtered: CandidateChatHistory = {}
+    Object.keys(parsed).forEach((studentId) => {
+      if (parsed[studentId].expiresAt > now) {
+        // Convert timestamp strings back to Date objects
+        filtered[studentId] = {
+          ...parsed[studentId],
+          messages: parsed[studentId].messages.map(msg => ({
+            ...msg,
+            timestamp: new Date(msg.timestamp)
+          }))
+        }
+      }
+    })
+    
+    return filtered
+  } catch (error) {
+    console.error("Error loading chat history:", error)
+    return {}
+  }
+}
+
+const saveChatHistory = (history: CandidateChatHistory) => {
+  if (typeof window === "undefined") return
+  
+  try {
+    localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(history))
+  } catch (error) {
+    console.error("Error saving chat history:", error)
+  }
+}
+
+const loadSearchHistory = (): SearchResult[] => {
+  if (typeof window === "undefined") return []
+  
+  try {
+    const stored = localStorage.getItem(SEARCH_HISTORY_STORAGE_KEY)
+    if (!stored) return []
+    
+    const parsed = JSON.parse(stored)
+    // Convert timestamp strings back to Date objects
+    return parsed.map((item: any) => ({
+      ...item,
+      timestamp: new Date(item.timestamp)
+    }))
+  } catch (error) {
+    console.error("Error loading search history:", error)
+    return []
+  }
+}
+
+const saveSearchHistory = (history: SearchResult[]) => {
+  if (typeof window === "undefined") return
+  
+  try {
+    localStorage.setItem(SEARCH_HISTORY_STORAGE_KEY, JSON.stringify(history))
+  } catch (error) {
+    console.error("Error saving search history:", error)
+  }
+}
+
 export default function HeadhuntingPage() {
   const { toast } = useToast()
   const [searchQuery, setSearchQuery] = useState("")
   const [searchHistory, setSearchHistory] = useState<SearchResult[]>([])
   const [loading, setLoading] = useState(false)
+  
+  // Chat state
+  const [chatOpen, setChatOpen] = useState(false)
+  const [selectedCandidate, setSelectedCandidate] = useState<CandidateResult | null>(null)
+  const [candidateChats, setCandidateChats] = useState<CandidateChatHistory>({})
+  const [currentChatMessage, setCurrentChatMessage] = useState("")
+  const [sendingMessage, setSendingMessage] = useState(false)
+  
+  // Load chat history from localStorage on mount
+  useEffect(() => {
+    const loadedChats = loadChatHistory()
+    setCandidateChats(loadedChats)
+    
+    const loadedSearchHistory = loadSearchHistory()
+    setSearchHistory(loadedSearchHistory)
+  }, [])
+  
+  // Save chat history to localStorage whenever it changes
+  useEffect(() => {
+    if (Object.keys(candidateChats).length > 0) {
+      saveChatHistory(candidateChats)
+    }
+  }, [candidateChats])
+  
+  // Save search history to localStorage whenever it changes
+  useEffect(() => {
+    if (searchHistory.length > 0) {
+      saveSearchHistory(searchHistory)
+    }
+  }, [searchHistory])
 
   const handleSearch = async () => {
     if (!searchQuery.trim()) {
@@ -98,9 +220,165 @@ export default function HeadhuntingPage() {
 
   const handleClearHistory = () => {
     setSearchHistory([])
+    if (typeof window !== "undefined") {
+      localStorage.removeItem(SEARCH_HISTORY_STORAGE_KEY)
+    }
     toast({
       title: "History Cleared",
       description: "Search history has been cleared",
+    })
+  }
+  
+  // Chat functions
+  const handleOpenCandidateChat = (candidate: CandidateResult) => {
+    if (!candidate.student_id) {
+      toast({
+        title: "Cannot Open Chat",
+        description: "Student ID not available for this candidate",
+        variant: "destructive",
+      })
+      return
+    }
+    
+    setSelectedCandidate(candidate)
+    
+    // Initialize chat if doesn't exist
+    if (!candidateChats[candidate.student_id]) {
+      const now = Date.now()
+      const newChat = {
+        messages: [
+          {
+            role: "assistant" as const,
+            content: `Hi! I'm here to help you learn more about **${candidate.name}**. You can ask me about their skills, experience, projects, or how well they match your requirements.`,
+            timestamp: new Date()
+          }
+        ],
+        expiresAt: now + CHAT_EXPIRY_MS,
+        candidateName: candidate.name
+      }
+      
+      setCandidateChats(prev => ({
+        ...prev,
+        [candidate.student_id!]: newChat
+      }))
+    }
+    
+    setChatOpen(true)
+  }
+  
+  const handleSendChatMessage = async () => {
+    if (!currentChatMessage.trim() || !selectedCandidate || !selectedCandidate.student_id) return
+    
+    const studentId = selectedCandidate.student_id
+    const userMessage: ChatMessage = {
+      role: "user",
+      content: currentChatMessage,
+      timestamp: new Date()
+    }
+    
+    // Add user message to chat history
+    setCandidateChats(prev => ({
+      ...prev,
+      [studentId]: {
+        ...prev[studentId],
+        messages: [...prev[studentId].messages, userMessage],
+        expiresAt: Date.now() + CHAT_EXPIRY_MS // Extend expiry on activity
+      }
+    }))
+    
+    setCurrentChatMessage("")
+    setSendingMessage(true)
+    
+    try {
+      const chatHistory = candidateChats[studentId].messages
+      const messagesForAPI = [...chatHistory, userMessage].map(msg => ({
+        role: msg.role,
+        content: msg.content
+      }))
+      
+      const response = await fetch("http://localhost:8000/chat/chat_with_history", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          messages: messagesForAPI,
+          temperature: 0.7,
+          student_id: studentId
+        }),
+      })
+      
+      if (!response.ok) {
+        throw new Error("Failed to get response")
+      }
+      
+      const data = await response.json()
+      
+      const aiMessage: ChatMessage = {
+        role: "assistant",
+        content: data.raw_response || data.response || "No response received",
+        timestamp: new Date()
+      }
+      
+      setCandidateChats(prev => ({
+        ...prev,
+        [studentId]: {
+          ...prev[studentId],
+          messages: [...prev[studentId].messages, aiMessage]
+        }
+      }))
+    } catch (error) {
+      console.error("Chat error:", error)
+      const errorMessage: ChatMessage = {
+        role: "assistant",
+        content: "Sorry, I couldn't process your message. Please try again.",
+        timestamp: new Date()
+      }
+      
+      setCandidateChats(prev => ({
+        ...prev,
+        [studentId]: {
+          ...prev[studentId],
+          messages: [...prev[studentId].messages, errorMessage]
+        }
+      }))
+      
+      toast({
+        title: "Chat Failed",
+        description: "Failed to get response. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setSendingMessage(false)
+    }
+  }
+  
+  const handleClearCandidateChat = () => {
+    if (!selectedCandidate || !selectedCandidate.student_id) return
+    
+    const studentId = selectedCandidate.student_id
+    const candidateName = selectedCandidate.name
+    
+    // Reset to initial message
+    const now = Date.now()
+    setCandidateChats(prev => ({
+      ...prev,
+      [studentId]: {
+        messages: [
+          {
+            role: "assistant" as const,
+            content: `Hi! I'm here to help you learn more about **${candidateName}**. You can ask me about their skills, experience, projects, or how well they match your requirements.`,
+            timestamp: new Date()
+          }
+        ],
+        expiresAt: now + CHAT_EXPIRY_MS,
+        candidateName: candidateName
+      }
+    }))
+    
+    toast({
+      title: "Chat Cleared",
+      description: `Chat history with ${candidateName} has been cleared`,
     })
   }
 
@@ -210,12 +488,44 @@ export default function HeadhuntingPage() {
                                       <div>
                                         <p className="text-xs font-medium text-muted-foreground mb-2">Notable Projects</p>
                                         <ul className="text-sm space-y-1.5">
-                                          {candidate.notable_github_projects.map((project, projIndex) => (
-                                            <li key={projIndex} className="flex items-start gap-2">
-                                              <ExternalLink className="h-3 w-3 mt-1 flex-shrink-0" />
-                                              {project}
-                                            </li>
-                                          ))}
+                                          {candidate.notable_github_projects.map((project, projIndex) => {
+                                            // Extract repo name from project string (format: "repo-name: description" or just "repo-name")
+                                            const repoMatch = project.match(/^([^:]+)/)
+                                            const repoName = repoMatch ? repoMatch[1].trim() : project
+                                            
+                                            // Extract username from github_link if available
+                                            let repoUrl = null
+                                            if (candidate.github_link && candidate.github_link !== "N/A") {
+                                              const usernameMatch = candidate.github_link.match(/github\.com\/([^\/]+)/)
+                                              if (usernameMatch) {
+                                                const username = usernameMatch[1]
+                                                repoUrl = `https://github.com/${username}/${repoName}`
+                                              }
+                                            }
+                                            
+                                            return (
+                                              <li key={projIndex} className="flex items-start gap-2 group">
+                                                {repoUrl ? (
+                                                  <>
+                                                    <a 
+                                                      href={repoUrl} 
+                                                      target="_blank" 
+                                                      rel="noopener noreferrer"
+                                                      className="flex items-start gap-2 hover:text-primary transition-colors flex-1"
+                                                    >
+                                                      <ExternalLink className="h-3 w-3 mt-1 flex-shrink-0 group-hover:text-primary" />
+                                                      <span className="group-hover:underline">{project}</span>
+                                                    </a>
+                                                  </>
+                                                ) : (
+                                                  <>
+                                                    <ExternalLink className="h-3 w-3 mt-1 flex-shrink-0 text-muted-foreground" />
+                                                    {project}
+                                                  </>
+                                                )}
+                                              </li>
+                                            )
+                                          })}
                                         </ul>
                                       </div>
                                     )}
@@ -226,6 +536,17 @@ export default function HeadhuntingPage() {
                                     
                                     {/* Links Section */}
                                     <div className="pt-3 border-t-2 space-y-2">
+                                      {candidate.student_id && (
+                                        <Button 
+                                          variant="default" 
+                                          size="sm" 
+                                          className="w-full border-2 bg-primary" 
+                                          onClick={() => handleOpenCandidateChat(candidate)}
+                                        >
+                                          <MessageSquare className="h-4 w-4 mr-2" />
+                                          Know More About This Person
+                                        </Button>
+                                      )}
                                       {candidate.github_link && candidate.github_link !== "N/A" && (
                                         <Button variant="outline" size="sm" className="w-full border-2" asChild>
                                           <a href={candidate.github_link} target="_blank" rel="noopener noreferrer">
@@ -235,7 +556,7 @@ export default function HeadhuntingPage() {
                                         </Button>
                                       )}
                                       {candidate.candidate_link && (
-                                        <Button variant="default" size="sm" className="w-full border-2" asChild>
+                                        <Button variant="outline" size="sm" className="w-full border-2" asChild>
                                           <a href={candidate.candidate_link} target="_blank" rel="noopener noreferrer">
                                             <ExternalLink className="h-4 w-4 mr-2" />
                                             View Full Profile
@@ -373,6 +694,137 @@ export default function HeadhuntingPage() {
           </CardContent>
         </Card>
       </div>
+      
+      {/* Candidate Chat Sheet */}
+      <Sheet open={chatOpen} onOpenChange={setChatOpen}>
+        <SheetContent side="right" className="w-[500px] sm:w-[540px] sm:max-w-[540px] flex flex-col p-0">
+          <SheetHeader className="p-6 pb-4 border-b">
+            <SheetTitle className="flex items-center gap-2">
+              <Bot className="h-5 w-5 text-primary" />
+              Chat About Candidate
+            </SheetTitle>
+            <SheetDescription>
+              {selectedCandidate ? (
+                <>Ask questions about <strong>{selectedCandidate.name}</strong> and their qualifications</>
+              ) : (
+                "Learn more about this candidate"
+              )}
+            </SheetDescription>
+          </SheetHeader>
+          
+          {selectedCandidate && selectedCandidate.student_id && candidateChats[selectedCandidate.student_id] && (
+            <>
+              {/* Chat Messages */}
+              <div className="flex-1 overflow-hidden">
+                <ScrollArea className="h-full p-6">
+                  <div className="space-y-4">
+                    {candidateChats[selectedCandidate.student_id].messages.map((message, index) => (
+                      <div
+                        key={index}
+                        className={`flex gap-3 ${message.role === "user" ? "justify-end" : "justify-start"}`}
+                      >
+                        {message.role === "assistant" && (
+                          <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
+                            <Bot className="h-4 w-4 text-primary" />
+                          </div>
+                        )}
+                        <div
+                          className={`max-w-[80%] rounded-lg p-3 ${
+                            message.role === "user"
+                              ? "bg-primary text-primary-foreground"
+                              : "bg-secondary text-secondary-foreground"
+                          }`}
+                        >
+                          {message.role === "assistant" ? (
+                            <div className="text-sm prose prose-sm dark:prose-invert max-w-none">
+                              <ReactMarkdown
+                                components={{
+                                  p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
+                                  ul: ({ children }) => <ul className="my-2 ml-4 list-disc space-y-1">{children}</ul>,
+                                  ol: ({ children }) => <ol className="my-2 ml-4 list-decimal space-y-1">{children}</ol>,
+                                  li: ({ children }) => <li className="leading-relaxed">{children}</li>,
+                                  strong: ({ children }) => <strong className="font-semibold text-primary">{children}</strong>,
+                                  code: ({ children }) => <code className="bg-muted px-1 py-0.5 rounded text-xs">{children}</code>,
+                                }}
+                              >
+                                {message.content}
+                              </ReactMarkdown>
+                            </div>
+                          ) : (
+                            <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                          )}
+                          <p className="text-xs mt-2 opacity-70">
+                            {message.timestamp.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                          </p>
+                        </div>
+                        {message.role === "user" && (
+                          <div className="flex-shrink-0 w-8 h-8 rounded-full bg-accent flex items-center justify-center">
+                            <User className="h-4 w-4 text-accent-foreground" />
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                    {sendingMessage && (
+                      <div className="flex gap-3 justify-start">
+                        <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
+                          <Bot className="h-4 w-4 text-primary" />
+                        </div>
+                        <div className="bg-secondary text-secondary-foreground rounded-lg p-3">
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </ScrollArea>
+              </div>
+              
+              {/* Chat Input */}
+              <div className="p-6 pt-4 border-t border-border space-y-2">
+                <div className="flex justify-end">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleClearCandidateChat}
+                    className="text-xs"
+                  >
+                    <X className="h-3 w-3 mr-1" />
+                    Clear Chat
+                  </Button>
+                </div>
+                <div className="flex gap-2">
+                  <Input
+                    placeholder={`Ask about ${selectedCandidate.name}...`}
+                    value={currentChatMessage}
+                    onChange={(e) => setCurrentChatMessage(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.shiftKey) {
+                        e.preventDefault()
+                        handleSendChatMessage()
+                      }
+                    }}
+                    disabled={sendingMessage}
+                    className="flex-1"
+                  />
+                  <Button 
+                    onClick={handleSendChatMessage} 
+                    disabled={!currentChatMessage.trim() || sendingMessage} 
+                    size="icon"
+                  >
+                    {sendingMessage ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Send className="h-4 w-4" />
+                    )}
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Press Enter to send • Chat expires after 1 hour of inactivity
+                </p>
+              </div>
+            </>
+          )}
+        </SheetContent>
+      </Sheet>
     </div>
   )
 }

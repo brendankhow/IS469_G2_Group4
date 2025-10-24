@@ -21,6 +21,58 @@ interface UserProfile {
   resume_url?: string
 }
 
+interface InterviewChatHistory {
+  [studentId: string]: {
+    messages: ChatMessage[]
+    expiresAt: number
+  }
+}
+
+// LocalStorage utilities for chat persistence
+const INTERVIEW_CHAT_STORAGE_KEY = "interview_assistant_chats"
+const CHAT_EXPIRY_MS = 60 * 60 * 1000 // 1 hour
+
+const loadInterviewChats = (): InterviewChatHistory => {
+  if (typeof window === "undefined") return {}
+  
+  try {
+    const stored = localStorage.getItem(INTERVIEW_CHAT_STORAGE_KEY)
+    if (!stored) return {}
+    
+    const parsed: InterviewChatHistory = JSON.parse(stored)
+    const now = Date.now()
+    
+    // Filter out expired chats silently
+    const filtered: InterviewChatHistory = {}
+    Object.keys(parsed).forEach((studentId) => {
+      if (parsed[studentId].expiresAt > now) {
+        filtered[studentId] = {
+          ...parsed[studentId],
+          messages: parsed[studentId].messages.map(msg => ({
+            ...msg,
+            timestamp: new Date(msg.timestamp)
+          }))
+        }
+      }
+    })
+    
+    return filtered
+  } catch (error) {
+    console.error("Error loading interview chat history:", error)
+    return {}
+  }
+}
+
+const saveInterviewChats = (history: InterviewChatHistory) => {
+  if (typeof window === "undefined") return
+  
+  try {
+    localStorage.setItem(INTERVIEW_CHAT_STORAGE_KEY, JSON.stringify(history))
+  } catch (error) {
+    console.error("Error saving interview chat history:", error)
+  }
+}
+
 export default function InterviewAssistantPage() {
   const { toast } = useToast()
   const [currentMessage, setCurrentMessage] = useState("")
@@ -32,6 +84,33 @@ export default function InterviewAssistantPage() {
   useEffect(() => {
     fetchProfile()
   }, [])
+  
+  // Load chat history from localStorage when profile is loaded
+  useEffect(() => {
+    if (profile) {
+      const studentKey = profile.id.toString()
+      const allChats = loadInterviewChats()
+      
+      if (allChats[studentKey] && allChats[studentKey].messages) {
+        setChatHistory(allChats[studentKey].messages)
+      }
+    }
+  }, [profile])
+  
+  // Save chat history to localStorage whenever it changes
+  useEffect(() => {
+    if (profile && chatHistory.length > 0) {
+      const studentKey = profile.id.toString()
+      const allChats = loadInterviewChats()
+      
+      allChats[studentKey] = {
+        messages: chatHistory,
+        expiresAt: Date.now() + CHAT_EXPIRY_MS
+      }
+      
+      saveInterviewChats(allChats)
+    }
+  }, [chatHistory, profile])
 
   const fetchProfile = async () => {
     try {
@@ -112,6 +191,15 @@ export default function InterviewAssistantPage() {
 
   const handleClearHistory = () => {
     setChatHistory([])
+    
+    // Clear from localStorage as well
+    if (profile) {
+      const studentKey = profile.id.toString()
+      const allChats = loadInterviewChats()
+      delete allChats[studentKey]
+      saveInterviewChats(allChats)
+    }
+    
     toast({
       title: "History Cleared",
       description: "Chat history has been cleared",
@@ -215,18 +303,20 @@ export default function InterviewAssistantPage() {
                             <div className="flex justify-start">
                               <div className="max-w-[85%] space-y-2">
                                 <div className="bg-secondary rounded-lg p-5 border-2 shadow-sm">
-                                  <div className="prose prose-sm dark:prose-invert max-w-none prose-headings:font-bold prose-headings:mt-4 prose-headings:mb-2 prose-p:my-3 prose-p:leading-relaxed prose-strong:font-bold prose-strong:text-foreground prose-ul:my-3 prose-ol:my-3 prose-li:my-1">
+                                  <div className="prose prose-sm dark:prose-invert max-w-none">
                                     <ReactMarkdown
                                       components={{
-                                        strong: ({node, ...props}) => <strong className="font-bold text-foreground" {...props} />,
-                                        em: ({node, ...props}) => <em className="italic" {...props} />,
-                                        h1: ({node, ...props}) => <h1 className="text-xl font-bold mt-4 mb-2" {...props} />,
-                                        h2: ({node, ...props}) => <h2 className="text-lg font-bold mt-4 mb-2" {...props} />,
-                                        h3: ({node, ...props}) => <h3 className="text-base font-bold mt-3 mb-2" {...props} />,
-                                        p: ({node, ...props}) => <p className="my-3 leading-relaxed" {...props} />,
-                                        ul: ({node, ...props}) => <ul className="my-3 ml-4 list-disc" {...props} />,
-                                        ol: ({node, ...props}) => <ol className="my-3 ml-4 list-decimal" {...props} />,
-                                        li: ({node, ...props}) => <li className="my-1" {...props} />,
+                                        p: ({ children }) => <p className="mb-3 last:mb-0 leading-relaxed">{children}</p>,
+                                        ul: ({ children }) => <ul className="my-3 ml-4 list-disc space-y-2">{children}</ul>,
+                                        ol: ({ children }) => <ol className="my-3 ml-4 list-decimal space-y-2">{children}</ol>,
+                                        li: ({ children }) => <li className="leading-relaxed">{children}</li>,
+                                        strong: ({ children }) => <strong className="font-semibold text-primary">{children}</strong>,
+                                        em: ({ children }) => <em className="italic">{children}</em>,
+                                        code: ({ children }) => <code className="bg-muted px-1.5 py-0.5 rounded text-xs font-mono">{children}</code>,
+                                        h1: ({ children }) => <h1 className="text-lg font-bold mb-2 mt-4 first:mt-0">{children}</h1>,
+                                        h2: ({ children }) => <h2 className="text-base font-bold mb-2 mt-3 first:mt-0">{children}</h2>,
+                                        h3: ({ children }) => <h3 className="text-sm font-bold mb-2 mt-3 first:mt-0">{children}</h3>,
+                                        blockquote: ({ children }) => <blockquote className="border-l-2 border-primary pl-3 my-3 italic">{children}</blockquote>,
                                       }}
                                     >
                                       {message.content}

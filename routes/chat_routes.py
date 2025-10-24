@@ -34,6 +34,7 @@ class CandidateEvaluation(BaseModel):
     next_step: str
     github_link: str
     candidate_link: str
+    student_id: Optional[str] = None  # Add student_id for frontend tracking
 
 class ChatResponse(BaseModel):
     response: Optional[List[CandidateEvaluation]] = None
@@ -241,6 +242,15 @@ def chat(request: ChatRequest):
         # Parse JSON response
         try:
             parsed_json = format_response(response_text)
+            
+            # Create name to student_id mapping from enriched_candidates
+            name_to_student_id = {c["name"]: c["student_id"] for c in enriched_candidates}
+            
+            # Inject student_id into each candidate based on name matching
+            for candidate_data in parsed_json:
+                candidate_name = candidate_data.get("name", "")
+                candidate_data["student_id"] = name_to_student_id.get(candidate_name, None)
+            
             # Validate and convert to Pydantic models
             candidates = [CandidateEvaluation(**candidate) for candidate in parsed_json]
             return ChatResponse(response=candidates)
@@ -256,22 +266,23 @@ def chat(request: ChatRequest):
 
 class ChatHistoryRequest(BaseModel):
     messages: List[Dict[str, str]]  # Each dict: {"role": "user"/"assistant", "content": "..."}
-    temperature: float = 0.7 
+    temperature: float = 0.7
+    student_id: Optional[str] = None  # Optional student ID for context-aware chat
 
 @router.post("/chat_with_history", response_model=ChatResponse)
 def chat_with_history(request: ChatHistoryRequest) -> ChatResponse:
     """
     LLM call with conversation history (for multi-turn chats).
-    
+    If student_id is provided, enriches the system prompt with student's resume and GitHub context.
+
     Args:
         messages: List of {"role": "user"/"assistant", "content": "..."} dicts
-        system_prompt: System context
         temperature: Creativity level
-        model: LLM model to use
-    
+        student_id: Optional student ID for context-aware responses
+
     Returns:
         ChatResponse: The LLM's response
-    
+
     Example usage:
         {
         "messages": [
@@ -280,15 +291,104 @@ def chat_with_history(request: ChatHistoryRequest) -> ChatResponse:
             { "role": "user", "content": "What about their JavaScript skills?" },
             { "role": "user", "content": "What is the candidate name again?" }
         ],
-        "temperature": 0.7
+        "temperature": 0.7,
+        "student_id": "123e4567-e89b-12d3-a456-426614174000"
         }
     """
     try:
+        system_prompt = "You are a helpful assistant."
+        
+        # If student_id provided, enrich with student context
+        if request.student_id:
+            try:
+                # Get student profile
+                profile_response = supabase.table("profiles").select("*").eq("id", request.student_id).single().execute()
+                
+                if profile_response.data:
+                    student_profile = profile_response.data
+                    student_name = student_profile.get("name", "this candidate")
+                    skills = student_profile.get("skills", "various skills")
+                    github_username = student_profile.get("github_username", "N/A")
+                    
+                    # Get the last user message to use as query for relevant context
+                    last_user_message = None
+                    for msg in reversed(request.messages):
+                        if msg.get("role") == "user":
+                            last_user_message = msg.get("content", "")
+                            break
+                    
+                    context_parts = []
+                    
+                    if last_user_message:
+                        # Generate embedding for the question
+                        query_embedding = embedder.generate_embedding(last_user_message)
+                        
+                        # Search unified portfolio for relevant information
+                        relevant_chunks = VectorStore.search_unified_portfolio(
+                            query_embedding=query_embedding,
+                            student_id=request.student_id,
+                            top_k=5,
+                            threshold=0.0
+                        )
+                        
+                        # Build context from relevant chunks
+                        for chunk in relevant_chunks:
+                            source = chunk.get("source", "")
+                            if source == "resume":
+                                text = chunk.get("resume_text", "")
+                                context_parts.append(f"From Resume:\n{text}")
+                            elif source == "github":
+                                repo_name = chunk.get("repo_name", "")
+                                text = chunk.get("text", "")
+                                metadata = chunk.get("metadata", {})
+                                language = metadata.get("language", "N/A")
+                                topics = metadata.get("topics", [])
+                                stars = metadata.get("stars", 0)
+                                topics_str = ", ".join(topics[:3]) if topics else "N/A"
+                                context_parts.append(
+                                    f"From GitHub Project '{repo_name}':\n"
+                                    f"  Language: {language} | Topics: {topics_str} | Stars: {stars}⭐\n"
+                                    f"  {text}"
+                                )
+                    
+                    context = "\n\n".join(context_parts) if context_parts else "No specific context found for this query."
+                    
+                    # Build enriched system prompt
+                    github_info = f"GitHub: @{github_username}" if github_username != "N/A" else "No GitHub profile"
+                    
+                    system_prompt = f"""You are a helpful professional recruiter assistant helping to learn more about {student_name}.
+
+**Candidate Profile:**
+- Name: {student_name}
+- Skills: {skills}
+- {github_info}
+
+**Relevant Information:**
+{context}
+
+**Instructions:**
+- Answer questions about this candidate based on their resume and GitHub portfolio
+- Be specific and reference actual projects, skills, and experiences from the provided context
+- Use **bold** for emphasis on key points and skills
+- Use bullet points (•) for listing items clearly
+- Maintain proper line spacing for readability
+- If information is not in the context, politely say you don't have that specific information
+- Be professional and highlight the candidate's strengths
+
+**Conversation History Context:**
+{chr(10).join([f"{'Candidate Info' if msg['role'] == 'assistant' else 'Recruiter'}: {msg['content'][:200]}..." for msg in request.messages[-4:]]) if len(request.messages) > 0 else 'This is the start of the conversation.'}
+"""
+                else:
+                    print(f"[chat_with_history] Student profile not found for ID: {request.student_id}")
+            except Exception as e:
+                print(f"[chat_with_history] Error fetching student context: {str(e)}")
+                # Continue with default system prompt if context fetch fails
+        
         completion = client.chat_completion(
             messages=[
                 {
                     "role": "system",
-                    "content": "You are a helpful assistant."
+                    "content": system_prompt
                 },
                 *request.messages  # unpack conversation history
             ],
@@ -299,4 +399,11 @@ def chat_with_history(request: ChatHistoryRequest) -> ChatResponse:
         return ChatResponse(raw_response=completion.choices[0].message.content)   
      
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"LLM error: {str(e)}")
+        error_msg = str(e)
+        print(f"[chat_with_history] ERROR occurred:")
+        print(f"  Error type: {type(e).__name__}")
+        print(f"  Error message: {error_msg}")
+        print(f"  Student ID: {request.student_id if request.student_id else 'None'}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"LLM error: {error_msg}")

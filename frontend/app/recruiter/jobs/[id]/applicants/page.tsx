@@ -33,10 +33,63 @@ interface ChatMessage {
   timestamp: Date
 }
 
+interface ApplicantChatHistory {
+  [applicantId: string]: {
+    messages: ChatMessage[]
+    expiresAt: number
+    applicantName: string
+  }
+}
+
 interface Job {
   id: number
   title: string
   description: string
+}
+
+// LocalStorage utilities for chat persistence
+const APPLICANT_CHAT_STORAGE_KEY = "applicant_chats"
+const CHAT_EXPIRY_MS = 60 * 60 * 1000 // 1 hour
+
+const loadApplicantChats = (): ApplicantChatHistory => {
+  if (typeof window === "undefined") return {}
+  
+  try {
+    const stored = localStorage.getItem(APPLICANT_CHAT_STORAGE_KEY)
+    if (!stored) return {}
+    
+    const parsed: ApplicantChatHistory = JSON.parse(stored)
+    const now = Date.now()
+    
+    // Filter out expired chats silently
+    const filtered: ApplicantChatHistory = {}
+    Object.keys(parsed).forEach((applicantId) => {
+      if (parsed[applicantId].expiresAt > now) {
+        filtered[applicantId] = {
+          ...parsed[applicantId],
+          messages: parsed[applicantId].messages.map(msg => ({
+            ...msg,
+            timestamp: new Date(msg.timestamp)
+          }))
+        }
+      }
+    })
+    
+    return filtered
+  } catch (error) {
+    console.error("Error loading applicant chats:", error)
+    return {}
+  }
+}
+
+const saveApplicantChats = (history: ApplicantChatHistory) => {
+  if (typeof window === "undefined") return
+  
+  try {
+    localStorage.setItem(APPLICANT_CHAT_STORAGE_KEY, JSON.stringify(history))
+  } catch (error) {
+    console.error("Error saving applicant chats:", error)
+  }
 }
 
 export default function ApplicantsPage() {
@@ -52,32 +105,49 @@ export default function ApplicantsPage() {
   // Chat sidebar state
   const [chatOpen, setChatOpen] = useState(false)
   const [selectedCandidateForChat, setSelectedCandidateForChat] = useState<Applicant | null>(null)
-  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([])
+  const [applicantChats, setApplicantChats] = useState<ApplicantChatHistory>({})
   const [currentMessage, setCurrentMessage] = useState("")
   const [sendingMessage, setSendingMessage] = useState(false)
+  
+  // PDF Viewer state  
+  const [pdfViewerOpen, setPdfViewerOpen] = useState(false)
+  const [selectedResumeUrl, setSelectedResumeUrl] = useState<string | null>(null)
+  const [selectedCandidateForResume, setSelectedCandidateForResume] = useState<Applicant | null>(null)
   
   // AI Matching state
   const [loadingAIMatching, setLoadingAIMatching] = useState(false)
   const [aiMatchingResults, setAiMatchingResults] = useState<string | null>(null)
   
-  // PDF Viewer state
-  const [pdfViewerOpen, setPdfViewerOpen] = useState(false)
-  const [selectedResumeUrl, setSelectedResumeUrl] = useState<string | null>(null)
-  const [selectedCandidateForResume, setSelectedCandidateForResume] = useState<Applicant | null>(null)
   const chatScrollRef = useRef<HTMLDivElement>(null)
+
+  // Load chat history from localStorage on mount
+  useEffect(() => {
+    const loaded = loadApplicantChats()
+    setApplicantChats(loaded)
+  }, [])
+  
+  // Save chat history to localStorage whenever it changes
+  useEffect(() => {
+    if (Object.keys(applicantChats).length > 0) {
+      saveApplicantChats(applicantChats)
+    }
+  }, [applicantChats])
 
   useEffect(() => {
     fetchApplicants()
   }, [params.id])
 
   useEffect(() => {
-    if (chatScrollRef.current) {
-      const scrollContainer = chatScrollRef.current.querySelector('[data-radix-scroll-area-viewport]')
-      if (scrollContainer) {
-        scrollContainer.scrollTop = scrollContainer.scrollHeight
+    if (chatScrollRef.current && selectedCandidateForChat) {
+      const applicantKey = selectedCandidateForChat.id.toString()
+      if (applicantChats[applicantKey]) {
+        const scrollContainer = chatScrollRef.current.querySelector('[data-radix-scroll-area-viewport]')
+        if (scrollContainer) {
+          scrollContainer.scrollTop = scrollContainer.scrollHeight
+        }
       }
     }
-  }, [chatMessages, sendingMessage])
+  }, [applicantChats, selectedCandidateForChat, sendingMessage])
 
   const fetchApplicants = async () => {
     try {
@@ -96,18 +166,29 @@ export default function ApplicantsPage() {
   }
 
   const handleOpenChat = (applicant: Applicant) => {
-    // Check if we already have chat history for this candidate
-    const isSameCandidate = selectedCandidateForChat?.id === applicant.id
+    setSelectedCandidateForChat(applicant)
     
-    if (!isSameCandidate) {
-      setSelectedCandidateForChat(applicant)
-      setChatMessages([
-        {
-          role: "assistant",
-          content: `Hi! I'm here to help you learn more about ${applicant.student_name || "this candidate"}. You can ask me about their skills, experience, or how well they match this position.`,
-          timestamp: new Date()
-        }
-      ])
+    const applicantKey = applicant.id.toString()
+    
+    // Initialize chat if doesn't exist
+    if (!applicantChats[applicantKey]) {
+      const now = Date.now()
+      const newChat = {
+        messages: [
+          {
+            role: "assistant" as const,
+            content: `Hi! I'm here to help you learn more about **${applicant.student_name || "this candidate"}**. You can ask me about their skills, experience, or how well they match this position.`,
+            timestamp: new Date()
+          }
+        ],
+        expiresAt: now + CHAT_EXPIRY_MS,
+        applicantName: applicant.student_name || "Candidate"
+      }
+      
+      setApplicantChats(prev => ({
+        ...prev,
+        [applicantKey]: newChat
+      }))
     }
     
     setChatOpen(true)
@@ -116,28 +197,42 @@ export default function ApplicantsPage() {
   const handleSendMessage = async () => {
     if (!currentMessage.trim() || !selectedCandidateForChat) return
     
+    const applicantKey = selectedCandidateForChat.id.toString()
     const userMessage: ChatMessage = {
       role: "user",
       content: currentMessage,
       timestamp: new Date()
     }
     
-    setChatMessages(prev => [...prev, userMessage])
+    // Add user message to chat history
+    setApplicantChats(prev => ({
+      ...prev,
+      [applicantKey]: {
+        ...prev[applicantKey],
+        messages: [...prev[applicantKey].messages, userMessage],
+        expiresAt: Date.now() + CHAT_EXPIRY_MS // Extend expiry on activity
+      }
+    }))
+    
     setCurrentMessage("")
     setSendingMessage(true)
     
     try {
+      const chatHistory = applicantChats[applicantKey].messages
+      const messagesForAPI = [...chatHistory, userMessage].map(msg => ({
+        role: msg.role,
+        content: msg.content
+      }))
+      
       const response = await fetch('http://localhost:8000/chat/chat_with_history', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          messages: [...chatMessages, userMessage].map(msg => ({
-            role: msg.role,
-            content: msg.content
-          })),
-          temperature: 0.7
+          messages: messagesForAPI,
+          temperature: 0.7,
+          student_id: selectedCandidateForChat?.student_id?.toString() // Pass student_id for context
         })
       })
       
@@ -153,7 +248,13 @@ export default function ApplicantsPage() {
         timestamp: new Date()
       }
       
-      setChatMessages(prev => [...prev, aiMessage])
+      setApplicantChats(prev => ({
+        ...prev,
+        [applicantKey]: {
+          ...prev[applicantKey],
+          messages: [...prev[applicantKey].messages, aiMessage]
+        }
+      }))
     } catch (error) {
       console.error('Chat error:', error)
       const errorMessage: ChatMessage = {
@@ -161,7 +262,14 @@ export default function ApplicantsPage() {
         content: "Sorry, I couldn't process your message. Please try again.",
         timestamp: new Date()
       }
-      setChatMessages(prev => [...prev, errorMessage])
+      
+      setApplicantChats(prev => ({
+        ...prev,
+        [applicantKey]: {
+          ...prev[applicantKey],
+          messages: [...prev[applicantKey].messages, errorMessage]
+        }
+      }))
     } finally {
       setSendingMessage(false)
     }
@@ -299,17 +407,25 @@ export default function ApplicantsPage() {
       setSelectedResumeUrl(resumeUrl)
       setSelectedCandidateForResume(applicant)
       
+      const applicantKey = applicant.id.toString()
+      
       // Initialize chat for this candidate if not already present
-      const existingChat = chatMessages.length > 0 && selectedCandidateForChat?.id === applicant.id
-      if (!existingChat) {
-        setChatMessages([
-          {
-            role: "assistant",
-            content: `Hi! I'm here to help you learn more about ${applicant.student_name || "this candidate"}. You can ask me about their skills, experience, or how well they match this position.`,
-            timestamp: new Date()
+      if (!applicantChats[applicantKey]) {
+        const now = Date.now()
+        setApplicantChats(prev => ({
+          ...prev,
+          [applicantKey]: {
+            messages: [
+              {
+                role: "assistant" as const,
+                content: `Hi! I'm here to help you learn more about **${applicant.student_name || "this candidate"}**. You can ask me about their skills, experience, or how well they match this position.`,
+                timestamp: new Date()
+              }
+            ],
+            expiresAt: now + CHAT_EXPIRY_MS,
+            applicantName: applicant.student_name || "Candidate"
           }
-        ])
-        setSelectedCandidateForChat(applicant)
+        }))
       }
       
       setPdfViewerOpen(true)
@@ -543,7 +659,7 @@ export default function ApplicantsPage() {
           <div className="flex-1 overflow-hidden" ref={chatScrollRef}>
             <ScrollArea className="h-full p-6">
               <div className="space-y-4">
-                {chatMessages.map((message, index) => (
+                {selectedCandidateForChat && applicantChats[selectedCandidateForChat.id.toString()]?.messages.map((message, index) => (
                   <div
                     key={index}
                     className={`flex gap-3 ${message.role === "user" ? "justify-end" : "justify-start"}`}
@@ -562,10 +678,26 @@ export default function ApplicantsPage() {
                     >
                       {message.role === "assistant" ? (
                         <div className="text-sm prose prose-sm dark:prose-invert max-w-none">
-                          <ReactMarkdown>{message.content}</ReactMarkdown>
+                          <ReactMarkdown
+                            components={{
+                              p: ({ children }) => <p className="mb-3 last:mb-0 leading-relaxed">{children}</p>,
+                              ul: ({ children }) => <ul className="my-3 ml-4 list-disc space-y-2">{children}</ul>,
+                              ol: ({ children }) => <ol className="my-3 ml-4 list-decimal space-y-2">{children}</ol>,
+                              li: ({ children }) => <li className="leading-relaxed">{children}</li>,
+                              strong: ({ children }) => <strong className="font-semibold text-primary">{children}</strong>,
+                              em: ({ children }) => <em className="italic">{children}</em>,
+                              code: ({ children }) => <code className="bg-muted px-1.5 py-0.5 rounded text-xs font-mono">{children}</code>,
+                              h1: ({ children }) => <h1 className="text-lg font-bold mb-2 mt-4 first:mt-0">{children}</h1>,
+                              h2: ({ children }) => <h2 className="text-base font-bold mb-2 mt-3 first:mt-0">{children}</h2>,
+                              h3: ({ children }) => <h3 className="text-sm font-bold mb-2 mt-3 first:mt-0">{children}</h3>,
+                              blockquote: ({ children }) => <blockquote className="border-l-2 border-primary pl-3 my-3 italic">{children}</blockquote>,
+                            }}
+                          >
+                            {message.content}
+                          </ReactMarkdown>
                         </div>
                       ) : (
-                        <p className="text-sm">{message.content}</p>
+                        <p className="text-sm whitespace-pre-wrap">{message.content}</p>
                       )}
                       <p className="text-xs mt-1 opacity-70">
                         {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -624,29 +756,42 @@ export default function ApplicantsPage() {
           onClose={() => setPdfViewerOpen(false)}
           pdfUrl={selectedResumeUrl || ""}
           candidate={selectedCandidateForResume}
-          chatMessages={chatMessages}
+          chatMessages={applicantChats[selectedCandidateForResume.id.toString()]?.messages || []}
           onSendMessage={async (message: string) => {
+            const applicantKey = selectedCandidateForResume.id.toString()
             const userMessage: ChatMessage = {
               role: "user",
               content: message,
               timestamp: new Date()
             }
             
-            setChatMessages(prev => [...prev, userMessage])
+            // Add user message to chat history
+            setApplicantChats(prev => ({
+              ...prev,
+              [applicantKey]: {
+                ...prev[applicantKey],
+                messages: [...prev[applicantKey].messages, userMessage],
+                expiresAt: Date.now() + CHAT_EXPIRY_MS
+              }
+            }))
             setSendingMessage(true)
             
             try {
+              const chatHistory = applicantChats[applicantKey].messages
+              const messagesForAPI = [...chatHistory, userMessage].map(msg => ({
+                role: msg.role,
+                content: msg.content
+              }))
+              
               const response = await fetch('http://localhost:8000/chat/chat_with_history', {
                 method: 'POST',
                 headers: {
                   'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
-                  messages: [...chatMessages, userMessage].map(msg => ({
-                    role: msg.role,
-                    content: msg.content
-                  })),
-                  temperature: 0.7
+                  messages: messagesForAPI,
+                  temperature: 0.7,
+                  student_id: selectedCandidateForResume?.student_id?.toString() // Pass student_id for context
                 })
               })
               
@@ -662,7 +807,13 @@ export default function ApplicantsPage() {
                 timestamp: new Date()
               }
               
-              setChatMessages(prev => [...prev, aiMessage])
+              setApplicantChats(prev => ({
+                ...prev,
+                [applicantKey]: {
+                  ...prev[applicantKey],
+                  messages: [...prev[applicantKey].messages, aiMessage]
+                }
+              }))
             } catch (error) {
               console.error('Chat error:', error)
               const errorMessage: ChatMessage = {
@@ -670,7 +821,13 @@ export default function ApplicantsPage() {
                 content: "Sorry, I couldn't process your message. Please try again.",
                 timestamp: new Date()
               }
-              setChatMessages(prev => [...prev, errorMessage])
+              setApplicantChats(prev => ({
+                ...prev,
+                [applicantKey]: {
+                  ...prev[applicantKey],
+                  messages: [...prev[applicantKey].messages, errorMessage]
+                }
+              }))
             } finally {
               setSendingMessage(false)
             }
