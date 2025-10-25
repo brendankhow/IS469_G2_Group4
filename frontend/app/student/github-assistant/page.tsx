@@ -40,12 +40,16 @@ interface GithubChatHistory {
       messages: ChatMessage[]
       expiresAt: number
     }
+    jobFit: {
+      messages: ChatMessage[]
+      expiresAt: number
+    }
   }
 }
 
 type AnalysisType = "quick" | "interview_prep" | "resume" | "job_fit"
 type AnalysisFocus = "all" | "interview"
-type TabType = "overall" | "repository"
+type TabType = "overall" | "repository" | "job-fit"
 
 // LocalStorage utilities for chat persistence
 const GITHUB_CHAT_STORAGE_KEY = "github_assistant_chats"
@@ -69,7 +73,7 @@ const loadGithubChats = (): GithubChatHistory => {
       // Handle both old and new formats
       if (studentData.overall && studentData.repository) {
         // New format
-        if (studentData.overall.expiresAt > now || studentData.repository.expiresAt > now) {
+        if (studentData.overall.expiresAt > now || studentData.repository.expiresAt > now || studentData.jobFit?.expiresAt > now) {
           filtered[studentId] = {
             overall: {
               messages: studentData.overall.expiresAt > now 
@@ -88,6 +92,15 @@ const loadGithubChats = (): GithubChatHistory => {
                   }))
                 : [],
               expiresAt: studentData.repository.expiresAt
+            },
+            jobFit: {
+              messages: studentData.jobFit && studentData.jobFit.expiresAt > now
+                ? studentData.jobFit.messages.map(msg => ({
+                    ...msg,
+                    timestamp: new Date(msg.timestamp)
+                  }))
+                : [],
+              expiresAt: studentData.jobFit?.expiresAt || Date.now() + CHAT_EXPIRY_MS
             }
           }
         }
@@ -130,6 +143,7 @@ export default function GithubAssistantPage() {
   const [currentMessage, setCurrentMessage] = useState("")
   const [overallChatHistory, setOverallChatHistory] = useState<ChatMessage[]>([])
   const [repositoryChatHistory, setRepositoryChatHistory] = useState<ChatMessage[]>([])
+  const [jobFitChatHistory, setJobFitChatHistory] = useState<ChatMessage[]>([])
   const [loading, setLoading] = useState(false)
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [profileLoading, setProfileLoading] = useState(true)
@@ -137,11 +151,12 @@ export default function GithubAssistantPage() {
   const [selectedAnalysisFocus, setSelectedAnalysisFocus] = useState<AnalysisFocus>("interview")
   const [activeTab, setActiveTab] = useState<TabType>("overall")
   const [repoName, setRepoName] = useState("")
+  const [targetRole, setTargetRole] = useState("")
   const [availableRepos, setAvailableRepos] = useState<string[]>([])
   const [loadingRepos, setLoadingRepos] = useState(false)
 
-  const chatHistory = activeTab === "overall" ? overallChatHistory : repositoryChatHistory
-  const setChatHistory = activeTab === "overall" ? setOverallChatHistory : setRepositoryChatHistory
+  const chatHistory = activeTab === "overall" ? overallChatHistory : activeTab === "repository" ? repositoryChatHistory : jobFitChatHistory
+  const setChatHistory = activeTab === "overall" ? setOverallChatHistory : activeTab === "repository" ? setRepositoryChatHistory : setJobFitChatHistory
 
   useEffect(() => {
     fetchProfile()
@@ -160,20 +175,24 @@ export default function GithubAssistantPage() {
         if (allChats[studentKey].repository?.messages) {
           setRepositoryChatHistory(allChats[studentKey].repository.messages)
         }
+        if (allChats[studentKey].jobFit?.messages) {
+          setJobFitChatHistory(allChats[studentKey].jobFit.messages)
+        }
       }
     }
   }, [profile])
   
   // Save chat history to localStorage whenever it changes
   useEffect(() => {
-    if (profile && (overallChatHistory.length > 0 || repositoryChatHistory.length > 0)) {
+    if (profile && (overallChatHistory.length > 0 || repositoryChatHistory.length > 0 || jobFitChatHistory.length > 0)) {
       const studentKey = profile.id.toString()
       const allChats = loadGithubChats()
       
       if (!allChats[studentKey]) {
         allChats[studentKey] = {
           overall: { messages: [], expiresAt: Date.now() + CHAT_EXPIRY_MS },
-          repository: { messages: [], expiresAt: Date.now() + CHAT_EXPIRY_MS }
+          repository: { messages: [], expiresAt: Date.now() + CHAT_EXPIRY_MS },
+          jobFit: { messages: [], expiresAt: Date.now() + CHAT_EXPIRY_MS }
         }
       }
       
@@ -187,9 +206,14 @@ export default function GithubAssistantPage() {
         expiresAt: Date.now() + CHAT_EXPIRY_MS
       }
       
+      allChats[studentKey].jobFit = {
+        messages: jobFitChatHistory,
+        expiresAt: Date.now() + CHAT_EXPIRY_MS
+      }
+      
       saveGithubChats(allChats)
     }
-  }, [overallChatHistory, repositoryChatHistory, profile])
+  }, [overallChatHistory, repositoryChatHistory, jobFitChatHistory, profile])
 
   const fetchProfile = async () => {
     try {
@@ -245,6 +269,14 @@ export default function GithubAssistantPage() {
       })
       return
     }
+    if (activeTab === "job-fit" && !targetRole.trim()) {
+      toast({
+        title: "Target Role Required",
+        description: "Please enter a target job role",
+        variant: "destructive",
+      })
+      return
+    }
 
     setLoading(true)
 
@@ -253,7 +285,9 @@ export default function GithubAssistantPage() {
       role: "user",
       content: activeTab === "overall" 
         ? `Generate ${analysisTypeLabels[selectedAnalysisType]} analysis`
-        : `Analyze ${repoName} - ${selectedAnalysisFocus === "all" ? "Complete Analysis" : "Interview Preparation"}`,
+        : activeTab === "repository"
+        ? `Analyze ${repoName} - ${selectedAnalysisFocus === "all" ? "Complete Analysis" : "Interview Preparation"}`
+        : `Analyze fit for ${targetRole} role`,
       timestamp: new Date(),
       analysisType: activeTab === "overall" ? selectedAnalysisType : undefined,
     }
@@ -273,7 +307,7 @@ export default function GithubAssistantPage() {
             analysis_type: selectedAnalysisType,
           }),
         })
-      } else {
+      } else if (activeTab === "repository") {
         response = await fetch("/api/ai/github-repo-analysis", {
           method: "POST",
           headers: {
@@ -283,6 +317,17 @@ export default function GithubAssistantPage() {
             student_id: profile.id.toString(),
             repo_name: repoName,
             analysis_focus: selectedAnalysisFocus,
+          }),
+        })
+      } else {
+        response = await fetch("/api/ai/github-job-fit", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            student_id: profile.id.toString(),
+            target_role: targetRole,
           }),
         })
       }
@@ -296,7 +341,9 @@ export default function GithubAssistantPage() {
       // Format the response based on analysis type
       const formattedContent = activeTab === "overall"
         ? formatAnalysisResponse(data.analysis, selectedAnalysisType)
-        : formatRepositoryAnalysis(data.analysis, selectedAnalysisFocus)
+        : activeTab === "repository"
+        ? formatRepositoryAnalysis(data.analysis, selectedAnalysisFocus)
+        : formatJobFitAnalysis(data.analysis)
 
       const aiMessage: ChatMessage = {
         role: "assistant",
@@ -312,7 +359,9 @@ export default function GithubAssistantPage() {
         role: "assistant",
         content: activeTab === "overall"
           ? "Sorry, I couldn't analyze your GitHub profile. Please make sure your GitHub username is set in your profile and try again."
-          : "Sorry, I couldn't analyze this repository. Please make sure the repository name is correct and try again.",
+          : activeTab === "repository"
+          ? "Sorry, I couldn't analyze this repository. Please make sure the repository name is correct and try again."
+          : "Sorry, I couldn't analyze the job fit. Please try again.",
         timestamp: new Date(),
       }
       setChatHistory((prev) => [...prev, errorMessage])
@@ -667,6 +716,89 @@ ${analysis.portfolio_value.roles_this_demonstrates_fit_for?.map((r: string) => `
     return content
   }
 
+  const formatJobFitAnalysis = (analysis: any) => {
+    if (!analysis) return "No analysis data received."
+
+    let content = `# Job Fit Analysis for ${targetRole}\n\n`
+
+    // Role Requirements
+    if (analysis.role_requirements) {
+      content += `## 📋 Role Requirements\n\n`
+      
+      content += `### Must-Have Skills\n`
+      content += analysis.role_requirements.must_have_skills?.map((skill: string) => `- ${skill}`).join("\n")
+      
+      content += `\n\n### Nice-to-Have Skills\n`
+      content += analysis.role_requirements.nice_to_have_skills?.map((skill: string) => `- ${skill}`).join("\n")
+      
+      content += `\n\n### Typical Projects\n`
+      content += analysis.role_requirements.typical_projects?.map((project: string) => `- ${project}`).join("\n")
+      content += `\n\n`
+    }
+
+    // Gap Analysis
+    if (analysis.gap_analysis) {
+      content += `## 📊 Gap Analysis\n\n`
+      content += `**Overall Fit Score:** ${analysis.gap_analysis.overall_fit_score}/10\n\n`
+      
+      content += `### ✅ Skills You Have\n`
+      content += analysis.gap_analysis.has?.map((skill: string) => `- ${skill}`).join("\n")
+      
+      content += `\n\n### ⚠️ Missing Critical Skills\n`
+      content += analysis.gap_analysis.missing_critical?.map((skill: string) => `- ${skill}`).join("\n")
+      
+      content += `\n\n### 💡 Missing Nice-to-Have Skills\n`
+      content += analysis.gap_analysis.missing_nice_to_have?.map((skill: string) => `- ${skill}`).join("\n")
+      content += `\n\n`
+    }
+
+    // Projects that Demonstrate Fit
+    if (analysis.projects_that_demonstrate_fit?.length > 0) {
+      content += `## 💼 Your Projects That Demonstrate Fit\n\n`
+      analysis.projects_that_demonstrate_fit.forEach((project: any) => {
+        content += `### ${project.project}\n`
+        content += `**Relevant Skills:** ${project.relevant_skills?.join(", ")}\n\n`
+        content += `**How to Present:** ${project.how_to_present}\n\n`
+      })
+    }
+
+    // Skill Building Roadmap
+    if (analysis.skill_building_roadmap?.length > 0) {
+      content += `## 🎯 Skill Building Roadmap\n\n`
+      analysis.skill_building_roadmap.forEach((item: any, index: number) => {
+        content += `### ${index + 1}. ${item.skill} (${item.priority} priority)\n`
+        content += `**Why Important:** ${item.why_important}\n\n`
+        content += `**How to Learn:** ${item.how_to_learn}\n\n`
+        content += `**Project Idea:** ${item.project_idea}\n\n`
+        content += `**Timeline:** ${item.timeline}\n\n`
+      })
+    }
+
+    // Current Competitiveness
+    if (analysis.current_competitiveness) {
+      content += `## 🏆 Current Competitiveness\n\n`
+      content += `**Rating:** ${analysis.current_competitiveness.rating}\n\n`
+      content += `**Reasoning:** ${analysis.current_competitiveness.reasoning}\n\n`
+      content += `**Percentile Estimate:** ${analysis.current_competitiveness.percentile_estimate}\n\n`
+    }
+
+    // Application Strategy
+    if (analysis.application_strategy) {
+      content += `## 🎯 Application Strategy\n\n`
+      content += `**Should Apply Now:** ${analysis.application_strategy.should_apply_now}\n\n`
+      content += `**Reasoning:** ${analysis.application_strategy.reasoning}\n\n`
+      content += `**How to Position Yourself:** ${analysis.application_strategy.how_to_position_yourself}\n\n`
+      
+      content += `### Resume Focus\n`
+      content += analysis.application_strategy.resume_focus?.map((item: string) => `- ${item}`).join("\n")
+      
+      content += `\n\n### Interview Preparation Focus\n`
+      content += analysis.application_strategy.interview_preparation_focus?.map((item: string) => `- ${item}`).join("\n")
+    }
+
+    return content
+  }
+
   const handleClearHistory = () => {
     setChatHistory([])
     
@@ -678,8 +810,10 @@ ${analysis.portfolio_value.roles_this_demonstrates_fit_for?.map((r: string) => `
       if (allChats[studentKey]) {
         if (activeTab === "overall") {
           allChats[studentKey].overall = { messages: [], expiresAt: Date.now() + CHAT_EXPIRY_MS }
-        } else {
+        } else if (activeTab === "repository") {
           allChats[studentKey].repository = { messages: [], expiresAt: Date.now() + CHAT_EXPIRY_MS }
+        } else {
+          allChats[studentKey].jobFit = { messages: [], expiresAt: Date.now() + CHAT_EXPIRY_MS }
         }
         saveGithubChats(allChats)
       }
@@ -734,7 +868,7 @@ ${analysis.portfolio_value.roles_this_demonstrates_fit_for?.map((r: string) => `
             ) : (
               <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as TabType)} className="flex-1 flex flex-col min-h-0">
                 <div className="border-b-2 px-6 pt-4 flex-shrink-0">
-                  <TabsList className="grid w-full max-w-md grid-cols-2">
+                  <TabsList className="grid w-full max-w-2xl grid-cols-3">
                     <TabsTrigger value="overall" className="gap-2">
                       <Sparkles className="h-4 w-4" />
                       Overall Analysis
@@ -742,6 +876,10 @@ ${analysis.portfolio_value.roles_this_demonstrates_fit_for?.map((r: string) => `
                     <TabsTrigger value="repository" className="gap-2">
                       <Code2 className="h-4 w-4" />
                       Repository Analysis
+                    </TabsTrigger>
+                    <TabsTrigger value="job-fit" className="gap-2">
+                      <Briefcase className="h-4 w-4" />
+                      Job Fit Analysis
                     </TabsTrigger>
                   </TabsList>
                 </div>
@@ -1285,6 +1423,167 @@ ${analysis.portfolio_value.roles_this_demonstrates_fit_for?.map((r: string) => `
                           <Button
                             onClick={handleAnalysisRequest}
                             disabled={loading || !repoName.trim()}
+                            variant="default"
+                          >
+                            Analyze
+                          </Button>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={handleClearHistory}
+                        >
+                          Clear History
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                </TabsContent>
+
+                {/* Job Fit Analysis Tab */}
+                <TabsContent value="job-fit" className="flex-1 flex flex-col m-0 data-[state=active]:flex overflow-hidden">
+                  <div className="flex-1 overflow-hidden">
+                    <ScrollArea className="h-full p-8">
+                      <div className="pb-4">
+                        {jobFitChatHistory.length === 0 ? (
+                          <div className="flex flex-col items-center justify-center h-full min-h-[400px] p-4">
+                            <div className="max-w-3xl w-full space-y-6">
+                              {/* Header Section */}
+                              <div className="text-center space-y-3">
+                                <div className="flex items-center justify-center gap-2">
+                                  <Briefcase className="h-8 w-8 text-primary" />
+                                  <h2 className="text-2xl font-bold">Analyze Job Fit</h2>
+                                </div>
+                                <p className="text-muted-foreground">
+                                  See how well your GitHub profile matches a specific role
+                                </p>
+                              </div>
+
+                              {/* Target Role Input Section */}
+                              <Card className="border-2">
+                                <CardHeader>
+                                  <CardTitle className="text-base">Target Role</CardTitle>
+                                  <CardDescription>
+                                    Enter the job role you're interested in
+                                  </CardDescription>
+                                </CardHeader>
+                                <CardContent className="space-y-4">
+                                  <div className="space-y-2">
+                                    <Input
+                                      placeholder="e.g., Full Stack Developer"
+                                      value={targetRole}
+                                      onChange={(e) => setTargetRole(e.target.value)}
+                                      className="border-2"
+                                    />
+                                    <p className="text-xs text-muted-foreground">
+                                      Common roles: Frontend Developer, Backend Developer, Full Stack Developer, 
+                                      Data Scientist, Machine Learning Engineer, Mobile Developer, DevOps Engineer
+                                    </p>
+                                  </div>
+                                </CardContent>
+                              </Card>
+
+                              {/* Call to Action */}
+                              <div className="text-center">
+                                <Button
+                                  size="lg"
+                                  onClick={handleAnalysisRequest}
+                                  disabled={loading || !targetRole.trim()}
+                                  className="border-2 px-8"
+                                >
+                                  {loading ? (
+                                    <>
+                                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                                      Analyzing Job Fit...
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Briefcase className="h-4 w-4 mr-2" />
+                                      Analyze Job Fit
+                                    </>
+                                  )}
+                                </Button>
+                              </div>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="space-y-6">
+                            {jobFitChatHistory.map((message, index) => (
+                              <div key={index} className="space-y-4">
+                                {message.role === "user" ? (
+                                  <div className="flex justify-end">
+                                    <div className="max-w-[85%] rounded-lg p-5 bg-primary text-primary-foreground shadow-md border-2 border-primary/20">
+                                      <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                                      <p className="text-xs mt-2 opacity-70">
+                                        {message.timestamp.toLocaleTimeString([], {
+                                          hour: "2-digit",
+                                          minute: "2-digit",
+                                        })}
+                                      </p>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <div className="flex justify-start">
+                                    <div className="max-w-[85%] space-y-2">
+                                      <div className="bg-secondary rounded-lg p-5 border-2 shadow-sm">
+                                        <div className="prose prose-sm dark:prose-invert max-w-none">
+                                          <ReactMarkdown
+                                            components={{
+                                              p: ({ children }) => <p className="mb-3 last:mb-0 leading-relaxed">{children}</p>,
+                                              ul: ({ children }) => <ul className="my-3 ml-4 list-disc space-y-2">{children}</ul>,
+                                              ol: ({ children }) => <ol className="my-3 ml-4 list-decimal space-y-2">{children}</ol>,
+                                              li: ({ children }) => <li className="leading-relaxed">{children}</li>,
+                                              strong: ({ children }) => <strong className="font-semibold text-primary">{children}</strong>,
+                                              em: ({ children }) => <em className="italic">{children}</em>,
+                                              code: ({ children }) => <code className="bg-muted px-1.5 py-0.5 rounded text-xs font-mono">{children}</code>,
+                                              h1: ({ children }) => <h1 className="text-lg font-bold mb-2 mt-4 first:mt-0">{children}</h1>,
+                                              h2: ({ children }) => <h2 className="text-base font-bold mb-2 mt-3 first:mt-0">{children}</h2>,
+                                              h3: ({ children }) => <h3 className="text-sm font-bold mb-2 mt-3 first:mt-0">{children}</h3>,
+                                              blockquote: ({ children }) => <blockquote className="border-l-2 border-primary pl-3 my-3 italic">{children}</blockquote>,
+                                            }}
+                                          >
+                                            {message.content}
+                                          </ReactMarkdown>
+                                        </div>
+                                      </div>
+                                      <p className="text-xs text-muted-foreground pl-2">
+                                        {message.timestamp.toLocaleTimeString([], {
+                                          hour: "2-digit",
+                                          minute: "2-digit",
+                                        })}
+                                      </p>
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                            {loading && (
+                              <div className="flex justify-start">
+                                <div className="bg-secondary rounded-lg p-5 border-2 shadow-sm">
+                                  <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </ScrollArea>
+                  </div>
+
+                  {/* Job Fit Analysis Controls */}
+                  <div className="p-4 border-t-2 flex-shrink-0 bg-background">
+                    {jobFitChatHistory.length > 0 && (
+                      <div className="mb-2 flex justify-between items-center">
+                        <div className="flex gap-2">
+                          <Input
+                            placeholder="e.g., Full Stack Developer"
+                            value={targetRole}
+                            onChange={(e) => setTargetRole(e.target.value)}
+                            className="border-2 w-80"
+                          />
+                          <Button
+                            onClick={handleAnalysisRequest}
+                            disabled={loading || !targetRole.trim()}
                             variant="default"
                           >
                             Analyze
