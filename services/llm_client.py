@@ -1,5 +1,6 @@
 # services/llm_client.py
 import os
+os.environ["HF_INFERENCE_ENDPOINT"] = "https://api-inference.huggingface.co"
 from huggingface_hub import InferenceClient
 from dotenv import load_dotenv
 from typing import List, Dict

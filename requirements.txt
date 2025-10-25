@@ -8,3 +8,5 @@ sentence-transformers
 pypdf2
 python-multipart
 yt_dlp
+llama-index
+ollama
