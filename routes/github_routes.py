@@ -1,10 +1,11 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel  
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from services.github.github_client import fetch_all_user_repos_data
 from services.github.github_embedder import process_github_repos
 from services.github.github_analysis import github_analysis_service
 from services.vector_store import VectorStore
+from services.llm_client import llm_client
 
 router = APIRouter()
 
@@ -208,4 +209,100 @@ def compare_against_role(request: JobFitComparisonRequest):
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Job fit analysis failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Job fit analysis failed: {str(e)}")   
+
+class GithubFollowupRequest(BaseModel):
+    student_id: str
+    github_username: str
+    question: str
+    chat_history: List[Dict[str, str]]  # Previous conversation in this session
+    temperature: float = 0.7
+
+@router.post("/followup", response_model=AnalysisResponse)
+def analyze_chat(request: GithubFollowupRequest):
+    """
+    Follow-up questions about a student's GitHub analysis.
+    Designed for students to ask questions about their own GitHub profile analysis.
+    
+    Example request:
+    {
+    "student_id": "dd5b35f8-2262-42bc-954e-8131afd6e367",
+    "github_username": "drawrowfly",
+    "question": "Can you explain more about my skill gaps",
+    "chat_history": [
+        {
+        "role": "assistant",
+        "content": "Your GitHub profile shows that you are good in frontend but need to work on backend as you only know hello world from python and not java"
+        },
+        {
+        "role": "user",
+        "content": "What are my strengths?"
+        }
+    ],
+    "temperature": 0.7
+    }
+    """
+    try:
+        # Extract the most recent analysis from chat history
+        previous_analysis = ""
+        for msg in request.chat_history:
+            if msg.get("role") == "assistant":
+                previous_analysis = msg.get("content", "")
+                break  # Get the most recent assistant message
+        
+        # Build conversation context summary
+        conversation_context = "\n".join([
+            f"{msg['role']}: {msg['content'][:150]}..." 
+            for msg in request.chat_history[-3:]
+        ]) if request.chat_history else 'This is the first question.'
+        
+        # Build system prompt
+        system_prompt = f"""You are an AI career advisor specializing in GitHub profile analysis and career development for software engineers.
+
+            **Context:**
+            The student (@{request.github_username}) has received a GitHub profile analysis and is now asking follow-up questions.
+
+            **Previous Analysis Summary:**
+            {previous_analysis[:2000]}
+
+            **Your Role:**
+            - Help the student understand their GitHub analysis
+            - Provide actionable career advice
+            - Suggest specific improvements to their projects or profile
+            - Answer questions about skill gaps, job readiness, or project quality
+            - Reference specific projects and skills from their profile
+            - Be encouraging but honest about areas for improvement
+
+            **Formatting Guidelines:**
+            - Use **bold** for key points and action items
+            - Use bullet points (•) for lists
+            - Keep responses concise but comprehensive
+            - Provide specific examples when possible
+            - Include next steps or action items when relevant
+
+            **Conversation Context:**
+            {conversation_context}
+            """
+        
+        # Build full messages array
+        messages = [
+            {"role": "system", "content": system_prompt},
+            *request.chat_history,  # Include full chat history for context
+            {"role": "user", "content": request.question}
+        ]
+        
+        # Use the centralized chat_completion method
+        response_text = llm_client.chat_completion(
+            messages=messages,
+            temperature=request.temperature
+        )
+        
+        # Return in the AnalysisResponse format
+        return AnalysisResponse(analysis={"response": response_text})
+        
+    except Exception as e:
+        error_msg = str(e)
+        print(f"[github_followup] Error: {error_msg}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"GitHub followup error: {error_msg}")

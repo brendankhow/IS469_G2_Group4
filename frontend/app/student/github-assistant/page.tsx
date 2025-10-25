@@ -154,6 +154,7 @@ export default function GithubAssistantPage() {
   const [targetRole, setTargetRole] = useState("")
   const [availableRepos, setAvailableRepos] = useState<string[]>([])
   const [loadingRepos, setLoadingRepos] = useState(false)
+  const [chatInput, setChatInput] = useState("")
 
   const chatHistory = activeTab === "overall" ? overallChatHistory : activeTab === "repository" ? repositoryChatHistory : jobFitChatHistory
   const setChatHistory = activeTab === "overall" ? setOverallChatHistory : activeTab === "repository" ? setRepositoryChatHistory : setJobFitChatHistory
@@ -799,6 +800,69 @@ ${analysis.portfolio_value.roles_this_demonstrates_fit_for?.map((r: string) => `
     return content
   }
 
+  const handleChatMessage = async () => {
+    if (!chatInput.trim() || !profile) return
+    
+    setLoading(true)
+    
+    // Add user message
+    const userMessage: ChatMessage = {
+      role: "user",
+      content: chatInput,
+      timestamp: new Date()
+    }
+    setChatHistory((prev) => [...prev, userMessage])
+    setChatInput("")
+    
+    try {
+      // Send follow-up question with context from previous analysis
+      const response = await fetch("/api/ai/github-followup", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          student_id: profile.id.toString(),
+          github_username: profile.github_username,
+          question: chatInput,
+          chat_history: overallChatHistory.map(msg => ({
+            role: msg.role,
+            content: msg.content
+          }))
+        }),
+      })
+      
+      if (!response.ok) {
+        throw new Error("Failed to get follow-up response")
+      }
+      
+      const data = await response.json()
+      
+      const aiMessage: ChatMessage = {
+        role: "assistant",
+        content: data.response,
+        timestamp: new Date()
+      }
+      
+      setChatHistory((prev) => [...prev, aiMessage])
+    } catch (error) {
+      console.error("Follow-up question error:", error)
+      const errorMessage: ChatMessage = {
+        role: "assistant",
+        content: "Sorry, I couldn't process your question. Please try again.",
+        timestamp: new Date(),
+      }
+      setChatHistory((prev) => [...prev, errorMessage])
+      toast({
+        title: "Error",
+        description: "Failed to get response. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const handleClearHistory = () => {
     setChatHistory([])
     
@@ -1104,7 +1168,7 @@ ${analysis.portfolio_value.roles_this_demonstrates_fit_for?.map((r: string) => `
 
                 {/* Analysis Controls */}
                 <div className="p-4 border-t-2 flex-shrink-0 bg-background">
-                  {chatHistory.length > 0 && (
+                  {overallChatHistory.length > 0 && (
                     <div className="mb-2 flex justify-end">
                       <Button
                         variant="ghost"
@@ -1115,63 +1179,114 @@ ${analysis.portfolio_value.roles_this_demonstrates_fit_for?.map((r: string) => `
                       </Button>
                     </div>
                   )}
-                  <div className="flex gap-3">
-                    <Select
-                      value={selectedAnalysisType}
-                      onValueChange={(value) => setSelectedAnalysisType(value as AnalysisType)}
-                      disabled={loading}
-                    >
-                      <SelectTrigger className="w-[280px] border-2">
-                        <SelectValue placeholder="Select analysis mode" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="quick">
-                          <div className="flex items-center gap-2">
-                            <Sparkles className="h-4 w-4" />
-                            <span>Quick Summary</span>
-                          </div>
-                        </SelectItem>
-                        <SelectItem value="interview_prep">
-                          <div className="flex items-center gap-2">
+                  
+                  {overallChatHistory.length === 0 ? (
+                    // Initial analysis mode
+                    <>
+                      <div className="flex gap-3">
+                        <Select
+                          value={selectedAnalysisType}
+                          onValueChange={(value) => setSelectedAnalysisType(value as AnalysisType)}
+                          disabled={loading}
+                        >
+                          <SelectTrigger className="w-[280px] border-2">
+                            <SelectValue placeholder="Select analysis mode" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="quick">
+                              <div className="flex items-center gap-2">
+                                <Sparkles className="h-4 w-4" />
+                                <span>Quick Summary</span>
+                              </div>
+                            </SelectItem>
+                            <SelectItem value="interview_prep">
+                              <div className="flex items-center gap-2">
+                                <MessageSquare className="h-4 w-4" />
+                                <span>Interview Preparation</span>
+                              </div>
+                            </SelectItem>
+                            <SelectItem value="resume">
+                              <div className="flex items-center gap-2">
+                                <Bot className="h-4 w-4" />
+                                <span>Resume Content</span>
+                              </div>
+                            </SelectItem>
+                            <SelectItem value="job_fit">
+                              <div className="flex items-center gap-2">
+                                <Github className="h-4 w-4" />
+                                <span>Job Fit Analysis</span>
+                              </div>
+                            </SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <Button
+                          onClick={handleAnalysisRequest}
+                          disabled={loading}
+                          className="border-2 flex-1"
+                        >
+                          {loading ? (
+                            <>
+                              <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                              Analyzing...
+                            </>
+                          ) : (
+                            <>
+                              <Sparkles className="h-4 w-4 mr-2" />
+                              Analyze
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-1.5">
+                        {analysisTypeDescriptions[selectedAnalysisType]}
+                      </p>
+                    </>
+                  ) : (
+                    // Chat mode after initial analysis
+                    <div className="space-y-2">
+                      <div className="flex gap-2">
+                        <Input
+                          placeholder="Ask a follow-up question about your analysis..."
+                          value={chatInput}
+                          onChange={(e) => setChatInput(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" && !e.shiftKey) {
+                              e.preventDefault()
+                              handleChatMessage()
+                            }
+                          }}
+                          disabled={loading}
+                          className="border-2 flex-1"
+                        />
+                        <Button
+                          onClick={handleChatMessage}
+                          disabled={loading || !chatInput.trim()}
+                          className="border-2"
+                        >
+                          {loading ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
                             <MessageSquare className="h-4 w-4" />
-                            <span>Interview Preparation</span>
-                          </div>
-                        </SelectItem>
-                        <SelectItem value="resume">
-                          <div className="flex items-center gap-2">
-                            <Bot className="h-4 w-4" />
-                            <span>Resume Content</span>
-                          </div>
-                        </SelectItem>
-                        <SelectItem value="job_fit">
-                          <div className="flex items-center gap-2">
-                            <Github className="h-4 w-4" />
-                            <span>Job Fit Analysis</span>
-                          </div>
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <Button
-                      onClick={handleAnalysisRequest}
-                      disabled={loading}
-                      className="border-2 flex-1"
-                    >
-                      {loading ? (
-                        <>
-                          <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                          Analyzing...
-                        </>
-                      ) : (
-                        <>
-                          <Sparkles className="h-4 w-4 mr-2" />
-                          Analyze
-                        </>
-                      )}
-                    </Button>
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-1.5">
-                    {analysisTypeDescriptions[selectedAnalysisType]}
-                  </p>
+                          )}
+                        </Button>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs text-muted-foreground">
+                          Ask for clarification, deeper insights, or specific recommendations
+                        </p>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={handleAnalysisRequest}
+                          disabled={loading}
+                          className="text-xs"
+                        >
+                          <Sparkles className="h-3 w-3 mr-1" />
+                          New Analysis
+                        </Button>
+                      </div>
+                    </div>
+                  )}
                 </div>
                 </TabsContent>
 
