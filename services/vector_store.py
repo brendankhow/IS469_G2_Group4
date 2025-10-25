@@ -247,7 +247,8 @@ class VectorStore:
     @staticmethod
     def get_student_portfolio_summary(student_id: str) -> Dict:
         """
-        Get portfolio summary for a student using the database function.
+        Fallback method to get portfolio summary by querying tables directly.
+        Used when the RPC function has type mismatches or fails.
         
         Args:
             student_id: Student ID (UUID)
@@ -255,21 +256,60 @@ class VectorStore:
         Returns:
             Summary dictionary with stats
         """
-        response = supabase.rpc(
-            "get_student_portfolio_summary",
-            {"filter_student_id": student_id}
-        ).execute()
-        
-        if response.data and len(response.data) > 0:
-            return response.data[0]
-        return {
-            "student_name": None,
-            "github_username": None,
-            "total_repos": 0,
-            "total_resume_chunks": 0,
-            "top_languages": [],
-            "total_stars": 0
-        }
+        try:
+            # Get profile info
+            profile_response = supabase.table("profiles").select("name, github_username").eq("id", student_id).execute()
+            profile = profile_response.data[0] if profile_response.data else {}
+            
+            # Get GitHub repos count and languages from github_embeddings table
+            github_response = supabase.table("github_embeddings").select("repo_name, metadata").eq("student_id", student_id).execute()
+            
+            repos = github_response.data if github_response.data else []
+            
+            # Get unique repos
+            unique_repos = {}
+            for item in repos:
+                repo_name = item.get('repo_name')
+                if repo_name and repo_name not in unique_repos:
+                    unique_repos[repo_name] = item.get('metadata', {})
+            
+            total_repos = len(unique_repos)
+            
+            # Extract languages and stars
+            languages = []
+            total_stars = 0
+            for repo_name, metadata in unique_repos.items():
+                if isinstance(metadata, dict):
+                    lang = metadata.get('language')
+                    if lang and lang not in languages:
+                        languages.append(lang)
+                    stars = metadata.get('stars', 0)
+                    if isinstance(stars, (int, float)):
+                        total_stars += int(stars)
+            
+            # Get resume chunks count
+            resume_response = supabase.table("resume_embeddings").select("id", count="exact").eq("student_id", student_id).execute()
+            total_resume_chunks = resume_response.count if resume_response.count else 0
+            
+            return {
+                "student_name": profile.get("name"),
+                "github_username": profile.get("github_username"),
+                "total_repos": total_repos,
+                "total_resume_chunks": total_resume_chunks,
+                "top_languages": languages[:5],  # Top 5 languages
+                "total_stars": int(total_stars),
+                "repositories": list(unique_repos.keys())  # List of repo names
+            }
+        except Exception as e:
+            print(f"Error in fallback portfolio summary: {str(e)}")
+            return {
+                "student_name": None,
+                "github_username": None,
+                "total_repos": 0,
+                "total_resume_chunks": 0,
+                "top_languages": [],
+                "total_stars": 0
+            }
     
     @staticmethod
     def search_unified_portfolio(

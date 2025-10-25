@@ -7,6 +7,7 @@ from services.embedder import embedder
 from services.vector_store import VectorStore
 from services.supabase_client import supabase
 from utils.json_parser import format_response
+from services.github.github_analysis import GitHubAnalysisService  
 import os
 
 load_dotenv()
@@ -18,6 +19,7 @@ HF_API_KEY = os.getenv("HF_API_KEY")
 MODEL_NAME = "deepseek-ai/DeepSeek-V3-0324" # i randomly piak a model, feel free to change and play around 
 
 client = InferenceClient(token=HF_API_KEY)
+github_analyzer = GitHubAnalysisService()  
 
 class ChatRequest(BaseModel):
     # testing
@@ -49,7 +51,7 @@ def chat(request: ChatRequest):
         matches = VectorStore.search_similar_resumes(
             query_embedding=query_embedding,
             top_k=5,
-            threshold=0.0
+            threshold=0.1
         )
 
         if not matches:
@@ -72,6 +74,7 @@ def chat(request: ChatRequest):
                 continue
                 
             profile = profile_resp.data[0]
+            github_username = profile.get("github_username", "N/A")
             
             # Get GitHub portfolio data for this student
             github_matches = VectorStore.search_github_repos(
@@ -81,8 +84,29 @@ def chat(request: ChatRequest):
                 threshold=0.0
             )
             
-            # Format GitHub projects
+            # Format GitHub projects with deep analysis
             github_projects = []
+            portfolio_summary = None
+            
+            # Get portfolio-level analysis if GitHub username exists
+            if github_username != "N/A" and sid:
+                try:
+                    # Use comprehensive analysis method with "quick" type
+                    portfolio_summary = github_analyzer.analyze_portfolio_comprehensive(
+                        student_id=sid,
+                        github_username=github_username,
+                        analysis_type="quick"
+                    )
+                    
+                    # Check if analysis returned an error
+                    if portfolio_summary.get("error"):
+                        print(f"Portfolio analysis error for {github_username}: {portfolio_summary['error']}")
+                        portfolio_summary = None
+                        
+                except Exception as analysis_error:
+                    print(f"Portfolio analysis error for {github_username}: {analysis_error}")
+                    portfolio_summary = None
+            
             for gh in github_matches:
                 repo_name = gh.get("repo_name", "Unknown")
                 metadata = gh.get("metadata", {})
@@ -104,10 +128,11 @@ def chat(request: ChatRequest):
                 "student_id": sid,
                 "name": profile.get("name", "Unknown"),
                 "skills": profile.get("skills", "N/A"),
-                "github_username": profile.get("github_username", "N/A"),
+                "github_username": github_username,
                 "resume_similarity": m.get("similarity", 0.0),
-                "resume_excerpt": m.get("resume_text", "")[:600],
-                "github_projects": github_projects
+                "resume_excerpt": m.get("resume_text", ""),
+                "github_projects": github_projects,
+                "portfolio_summary": portfolio_summary  # Add portfolio overview
             })
 
         # Build enriched RAG context with GitHub data
@@ -123,16 +148,43 @@ def chat(request: ChatRequest):
                 f"Resume excerpt: {c['resume_excerpt']}"
             ]
             
+            # Add portfolio summary if available
+            if c.get('portfolio_summary'):
+                ps = c['portfolio_summary']
+                candidate_info.append("\n📊 GitHub Portfolio Overview:")
+                
+                # Quick summary
+                if ps.get('quick_summary'):
+                    candidate_info.append(f"  Summary: {ps.get('quick_summary')}")
+                
+                # Technical identity
+                if ps.get('technical_identity'):
+                    candidate_info.append(f"  Technical Identity: {ps.get('technical_identity')}")
+                
+                # Key skills
+                if ps.get('key_skills'):
+                    candidate_info.append(f"  Key Skills: {', '.join(ps['key_skills'])}")
+                
+                # Standout projects
+                if ps.get('standout_projects'):
+                    candidate_info.append(f"  Standout Projects: {', '.join(ps['standout_projects'])}")
+                
+                # Job readiness
+                if ps.get('job_readiness'):
+                    readiness_emoji = "✅" if ps['job_readiness'] == "ready" else "🔄" if ps['job_readiness'] == "nearly_ready" else "⚠️"
+                    candidate_info.append(f"  Job Readiness: {readiness_emoji} {ps['job_readiness'].replace('_', ' ').title()}")
+            
+            
             # Add GitHub projects if available
             if c['github_projects']:
-                candidate_info.append("\nGitHub Projects:")
+                candidate_info.append("\n🔍 Top Relevant Projects:")
                 for j, proj in enumerate(c['github_projects'][:3]):  # Top 3 projects
                     candidate_info.append(
                         f"  • {proj['repo_name']} ({proj['language']}) - {proj['stars']}⭐ "
-                        f"[Match: {proj['similarity']:.2f}]\n"
-                        f"    Topics: {', '.join(proj['topics'][:3])}\n"
-                        f"    {proj['description']}"
+                        f"[Match: {proj['similarity']:.2f}]"
                     )
+                    candidate_info.append(f"    Topics: {', '.join(proj['topics'][:3])}")
+                    candidate_info.append(f"    {proj['description'][:200]}")
             
             rag_context_parts.append("\n".join(candidate_info))
         
@@ -144,12 +196,12 @@ def chat(request: ChatRequest):
             Rank candidates based on their skills, resume experience, AND GitHub portfolio projects. Github projects that demonstrate relevant skills and experience should be weighted heavily in your evaluation and if it doesn't match the job requirement, it should not be penalised. 
 
             For each candidate provide:
-            (1) Fit score (0-10) - consider both resume AND GitHub projects
-            (2) 2-3 bullets tying their experience/projects/skills to the job requirements
-                • [Bullet 1: Tie specific experience to job requirement]
-                • [Bullet 2: Highlight relevant skills or projects]
-                • [Bullet 3: Note any standout achievements]
-            (3) Notable GitHub projects that demonstrate relevant skills
+            (1) Fit score (0-10) - consider both resume AND GitHub projects with portfolio analysis
+            (2) 3 bullets tying their experience/projects/skills to the job requirements
+                • [Bullet 1: Tie specific experience to job requirement and provide evidence from the resume to support your claim]
+                • [Bullet 2: Highlight relevant skills or projects with technical evidence]
+                • [Bullet 3: Note any standout achievements or portfolio insights]
+            (3) Notable GitHub projects that demonstrate relevant skills (use project analysis data)
             (4) Recommended next step (interview/phone screen/reject)
 
             **Evaluation Framework:**
@@ -161,6 +213,8 @@ def chat(request: ChatRequest):
             - Resume match score indicates relevance
 
             2. **GitHub Portfolio (30% weight - BONUS EVIDENCE):**
+            - Portfolio overview (total repos, stars, active days, language diversity)
+            - Project-specific analysis (key skills, technical highlights)
             - Validates claimed skills with real code
             - Demonstrates active learning and contribution
             - Shows project complexity and quality
@@ -168,7 +222,7 @@ def chat(request: ChatRequest):
             - Missing GitHub data is neutral (not a negative)
 
             3. **Scoring Guidelines:**
-            - 9-10: Perfect match with strong portfolio evidence
+            - 9-10: Perfect match with strong portfolio evidence and technical depth
             - 7-8: Strong match with good portfolio or excellent resume alone
             - 5-6: Moderate match, some relevant experience
             - 3-4: Weak match, minimal relevant experience
@@ -182,6 +236,8 @@ def chat(request: ChatRequest):
             **Important:**
             - Be generous with candidates who have strong resumes but limited GitHub
             - GitHub projects are evidence of skill, not requirements
+            - Use portfolio summaries to understand overall technical breadth
+            - Reference specific project analyses in your evaluation bullets
             - Focus on relevant experience matching job needs
             - Provide actionable interview suggestions
             - If the GitHub does not have any relevant projects, you do not need to mention it in the evaluation.
