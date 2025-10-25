@@ -1243,7 +1243,7 @@ ${analysis.portfolio_value.roles_this_demonstrates_fit_for?.map((r: string) => `
                     </>
                   ) : (
                     // Chat mode after initial analysis
-                    <div className="space-y-2">
+                    <div className="space-y-3">
                       <div className="flex gap-2">
                         <Input
                           placeholder="Ask a follow-up question about your analysis..."
@@ -1270,20 +1270,57 @@ ${analysis.portfolio_value.roles_this_demonstrates_fit_for?.map((r: string) => `
                           )}
                         </Button>
                       </div>
-                      <div className="flex items-center justify-between">
-                        <p className="text-xs text-muted-foreground">
-                          Ask for clarification, deeper insights, or specific recommendations
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-xs text-muted-foreground flex-shrink">
+                          Ask a question or run a new analysis
                         </p>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={handleAnalysisRequest}
-                          disabled={loading}
-                          className="text-xs"
-                        >
-                          <Sparkles className="h-3 w-3 mr-1" />
-                          New Analysis
-                        </Button>
+                        <div className="flex gap-2 flex-shrink-0">
+                          <Select
+                            value={selectedAnalysisType}
+                            onValueChange={(value) => setSelectedAnalysisType(value as AnalysisType)}
+                            disabled={loading}
+                          >
+                            <SelectTrigger className="w-[200px] border-2 h-8 text-xs">
+                              <SelectValue placeholder="Analysis type" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="quick">
+                                <div className="flex items-center gap-2">
+                                  <Sparkles className="h-3 w-3" />
+                                  <span>Quick Summary</span>
+                                </div>
+                              </SelectItem>
+                              <SelectItem value="interview_prep">
+                                <div className="flex items-center gap-2">
+                                  <MessageSquare className="h-3 w-3" />
+                                  <span>Interview Prep</span>
+                                </div>
+                              </SelectItem>
+                              <SelectItem value="resume">
+                                <div className="flex items-center gap-2">
+                                  <Bot className="h-3 w-3" />
+                                  <span>Resume Content</span>
+                                </div>
+                              </SelectItem>
+                              <SelectItem value="job_fit">
+                                <div className="flex items-center gap-2">
+                                  <Github className="h-3 w-3" />
+                                  <span>Job Fit</span>
+                                </div>
+                              </SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={handleAnalysisRequest}
+                            disabled={loading}
+                            className="text-xs"
+                          >
+                            <Sparkles className="h-3 w-3 mr-1" />
+                            Analyze
+                          </Button>
+                        </div>
                       </div>
                     </div>
                   )}
