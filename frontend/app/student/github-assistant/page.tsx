@@ -12,7 +12,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Loader2, Send, Bot, Github, MessageSquare, Sparkles, Briefcase } from "lucide-react"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Loader2, Send, Bot, Github, MessageSquare, Sparkles, Briefcase, Code2, Search } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import ReactMarkdown from "react-markdown"
 
@@ -31,12 +32,20 @@ interface UserProfile {
 
 interface GithubChatHistory {
   [studentId: string]: {
-    messages: ChatMessage[]
-    expiresAt: number
+    overall: {
+      messages: ChatMessage[]
+      expiresAt: number
+    }
+    repository: {
+      messages: ChatMessage[]
+      expiresAt: number
+    }
   }
 }
 
 type AnalysisType = "quick" | "interview_prep" | "resume" | "job_fit"
+type AnalysisFocus = "all" | "interview"
+type TabType = "overall" | "repository"
 
 // LocalStorage utilities for chat persistence
 const GITHUB_CHAT_STORAGE_KEY = "github_assistant_chats"
@@ -55,13 +64,32 @@ const loadGithubChats = (): GithubChatHistory => {
     // Filter out expired chats silently
     const filtered: GithubChatHistory = {}
     Object.keys(parsed).forEach((studentId) => {
-      if (parsed[studentId].expiresAt > now) {
-        filtered[studentId] = {
-          ...parsed[studentId],
-          messages: parsed[studentId].messages.map(msg => ({
-            ...msg,
-            timestamp: new Date(msg.timestamp)
-          }))
+      const studentData = parsed[studentId]
+      
+      // Handle both old and new formats
+      if (studentData.overall && studentData.repository) {
+        // New format
+        if (studentData.overall.expiresAt > now || studentData.repository.expiresAt > now) {
+          filtered[studentId] = {
+            overall: {
+              messages: studentData.overall.expiresAt > now 
+                ? studentData.overall.messages.map(msg => ({
+                    ...msg,
+                    timestamp: new Date(msg.timestamp)
+                  }))
+                : [],
+              expiresAt: studentData.overall.expiresAt
+            },
+            repository: {
+              messages: studentData.repository.expiresAt > now
+                ? studentData.repository.messages.map(msg => ({
+                    ...msg,
+                    timestamp: new Date(msg.timestamp)
+                  }))
+                : [],
+              expiresAt: studentData.repository.expiresAt
+            }
+          }
         }
       }
     })
@@ -100,11 +128,20 @@ const analysisTypeDescriptions: Record<AnalysisType, string> = {
 export default function GithubAssistantPage() {
   const { toast } = useToast()
   const [currentMessage, setCurrentMessage] = useState("")
-  const [chatHistory, setChatHistory] = useState<ChatMessage[]>([])
+  const [overallChatHistory, setOverallChatHistory] = useState<ChatMessage[]>([])
+  const [repositoryChatHistory, setRepositoryChatHistory] = useState<ChatMessage[]>([])
   const [loading, setLoading] = useState(false)
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [profileLoading, setProfileLoading] = useState(true)
   const [selectedAnalysisType, setSelectedAnalysisType] = useState<AnalysisType>("quick")
+  const [selectedAnalysisFocus, setSelectedAnalysisFocus] = useState<AnalysisFocus>("interview")
+  const [activeTab, setActiveTab] = useState<TabType>("overall")
+  const [repoName, setRepoName] = useState("")
+  const [availableRepos, setAvailableRepos] = useState<string[]>([])
+  const [loadingRepos, setLoadingRepos] = useState(false)
+
+  const chatHistory = activeTab === "overall" ? overallChatHistory : repositoryChatHistory
+  const setChatHistory = activeTab === "overall" ? setOverallChatHistory : setRepositoryChatHistory
 
   useEffect(() => {
     fetchProfile()
@@ -116,26 +153,43 @@ export default function GithubAssistantPage() {
       const studentKey = profile.id.toString()
       const allChats = loadGithubChats()
       
-      if (allChats[studentKey] && allChats[studentKey].messages) {
-        setChatHistory(allChats[studentKey].messages)
+      if (allChats[studentKey]) {
+        if (allChats[studentKey].overall?.messages) {
+          setOverallChatHistory(allChats[studentKey].overall.messages)
+        }
+        if (allChats[studentKey].repository?.messages) {
+          setRepositoryChatHistory(allChats[studentKey].repository.messages)
+        }
       }
     }
   }, [profile])
   
   // Save chat history to localStorage whenever it changes
   useEffect(() => {
-    if (profile && chatHistory.length > 0) {
+    if (profile && (overallChatHistory.length > 0 || repositoryChatHistory.length > 0)) {
       const studentKey = profile.id.toString()
       const allChats = loadGithubChats()
       
-      allChats[studentKey] = {
-        messages: chatHistory,
+      if (!allChats[studentKey]) {
+        allChats[studentKey] = {
+          overall: { messages: [], expiresAt: Date.now() + CHAT_EXPIRY_MS },
+          repository: { messages: [], expiresAt: Date.now() + CHAT_EXPIRY_MS }
+        }
+      }
+      
+      allChats[studentKey].overall = {
+        messages: overallChatHistory,
+        expiresAt: Date.now() + CHAT_EXPIRY_MS
+      }
+      
+      allChats[studentKey].repository = {
+        messages: repositoryChatHistory,
         expiresAt: Date.now() + CHAT_EXPIRY_MS
       }
       
       saveGithubChats(allChats)
     }
-  }, [chatHistory, profile])
+  }, [overallChatHistory, repositoryChatHistory, profile])
 
   const fetchProfile = async () => {
     try {
@@ -153,32 +207,85 @@ export default function GithubAssistantPage() {
     }
   }
 
+  const fetchAvailableRepos = async () => {
+    if (!profile?.id) return
+    
+    setLoadingRepos(true)
+    try {
+      const response = await fetch(`/api/ai/github-repos?student_id=${profile.id}`)
+      if (!response.ok) throw new Error("Failed to fetch repos")
+      
+      const data = await response.json()
+      setAvailableRepos(data.repos || [])
+    } catch (error) {
+      console.error("Error fetching repos:", error)
+      toast({
+        title: "Error",
+        description: "Failed to load available repositories",
+        variant: "destructive",
+      })
+    } finally {
+      setLoadingRepos(false)
+    }
+  }
+
+  useEffect(() => {
+    if (profile && activeTab === "repository" && availableRepos.length === 0) {
+      fetchAvailableRepos()
+    }
+  }, [profile, activeTab])
+
   const handleAnalysisRequest = async () => {
     if (!profile || !profile.github_username) return
+    if (activeTab === "repository" && !repoName.trim()) {
+      toast({
+        title: "Repository Required",
+        description: "Please enter a repository name",
+        variant: "destructive",
+      })
+      return
+    }
 
     setLoading(true)
 
     // Add user message to history
     const userMessage: ChatMessage = {
       role: "user",
-      content: `Generate ${analysisTypeLabels[selectedAnalysisType]} analysis`,
+      content: activeTab === "overall" 
+        ? `Generate ${analysisTypeLabels[selectedAnalysisType]} analysis`
+        : `Analyze ${repoName} - ${selectedAnalysisFocus === "all" ? "Complete Analysis" : "Interview Preparation"}`,
       timestamp: new Date(),
-      analysisType: selectedAnalysisType,
+      analysisType: activeTab === "overall" ? selectedAnalysisType : undefined,
     }
     setChatHistory((prev) => [...prev, userMessage])
 
     try {
-      const response = await fetch("/api/ai/github-analysis", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          student_id: profile.id.toString(),
-          github_username: profile.github_username,
-          analysis_type: selectedAnalysisType,
-        }),
-      })
+      let response
+      if (activeTab === "overall") {
+        response = await fetch("/api/ai/github-analysis", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            student_id: profile.id.toString(),
+            github_username: profile.github_username,
+            analysis_type: selectedAnalysisType,
+          }),
+        })
+      } else {
+        response = await fetch("/api/ai/github-repo-analysis", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            student_id: profile.id.toString(),
+            repo_name: repoName,
+            analysis_focus: selectedAnalysisFocus,
+          }),
+        })
+      }
 
       if (!response.ok) {
         throw new Error("Failed to get GitHub analysis")
@@ -187,13 +294,15 @@ export default function GithubAssistantPage() {
       const data = await response.json()
 
       // Format the response based on analysis type
-      const formattedContent = formatAnalysisResponse(data.analysis, selectedAnalysisType)
+      const formattedContent = activeTab === "overall"
+        ? formatAnalysisResponse(data.analysis, selectedAnalysisType)
+        : formatRepositoryAnalysis(data.analysis, selectedAnalysisFocus)
 
       const aiMessage: ChatMessage = {
         role: "assistant",
         content: formattedContent,
         timestamp: new Date(),
-        analysisType: selectedAnalysisType,
+        analysisType: activeTab === "overall" ? selectedAnalysisType : undefined,
       }
 
       setChatHistory((prev) => [...prev, aiMessage])
@@ -201,7 +310,9 @@ export default function GithubAssistantPage() {
       console.error("GitHub analysis error:", error)
       const errorMessage: ChatMessage = {
         role: "assistant",
-        content: "Sorry, I couldn't analyze your GitHub profile. Please make sure your GitHub username is set in your profile and try again.",
+        content: activeTab === "overall"
+          ? "Sorry, I couldn't analyze your GitHub profile. Please make sure your GitHub username is set in your profile and try again."
+          : "Sorry, I couldn't analyze this repository. Please make sure the repository name is correct and try again.",
         timestamp: new Date(),
       }
       setChatHistory((prev) => [...prev, errorMessage])
@@ -410,6 +521,152 @@ ${analysis.job_search_strategy?.map((s: string) => `- ${s}`).join("\n")}`
     return content
   }
 
+  const formatRepositoryAnalysis = (analysis: any, focus: AnalysisFocus) => {
+    if (!analysis) return "No analysis data received."
+
+    let content = `# Repository Analysis\n\n`
+
+    // Project Overview
+    if (analysis.project_overview) {
+      content += `## 📋 Project Overview
+
+**One-liner:** ${analysis.project_overview.one_liner}
+
+${analysis.project_overview.detailed_summary}
+
+**Problem Statement:** ${analysis.project_overview.problem_statement}
+
+**Solution Approach:** ${analysis.project_overview.solution_approach}
+
+**Target Users:** ${analysis.project_overview.target_users}
+
+**Real-world Application:** ${analysis.project_overview.real_world_application}\n\n`
+    }
+
+    // Technical Deep Dive
+    if (analysis.technical_deep_dive) {
+      content += `## 🔧 Technical Deep Dive
+
+**Architecture:** ${analysis.technical_deep_dive.architecture}
+
+**Design Patterns:** ${analysis.technical_deep_dive.design_patterns?.join(", ")}
+
+### Technology Choices\n`
+      
+      analysis.technical_deep_dive.technology_choices?.forEach((tech: any) => {
+        content += `\n**${tech.technology}**
+- Why Good Choice: ${tech.why_good_choice}
+- Alternatives: ${tech.alternatives?.join(", ")}\n`
+      })
+
+      content += `\n**Code Quality Score:** ${analysis.technical_deep_dive.code_quality_assessment?.score}/10
+
+**Strengths:**
+${analysis.technical_deep_dive.code_quality_assessment?.strengths?.map((s: string) => `- ${s}`).join("\n")}
+
+**Areas for Improvement:**
+${analysis.technical_deep_dive.code_quality_assessment?.areas_for_improvement?.map((a: string) => `- ${a}`).join("\n")}
+
+**Scalability:** ${analysis.technical_deep_dive.scalability_analysis}
+
+**Security:** ${analysis.technical_deep_dive.security_considerations}
+
+**Complexity:** ${analysis.technical_deep_dive.complexity_rating}\n\n`
+    }
+
+    // Interview Discussion Guide (always shown but especially for interview focus)
+    if (analysis.interview_discussion_guide) {
+      content += `## 🎤 Interview Discussion Guide
+
+**Elevator Pitch:** ${analysis.interview_discussion_guide.elevator_pitch}
+
+**Key Talking Points:**
+${analysis.interview_discussion_guide.key_talking_points?.map((p: string) => `- ${p}`).join("\n")}
+
+### Expected Technical Questions\n`
+
+      analysis.interview_discussion_guide.technical_questions_to_expect?.forEach((q: any, i: number) => {
+        content += `\n**Q${i + 1}: ${q.question}**
+*Suggested Answer:* ${q.suggested_answer}\n`
+      })
+
+      if (analysis.interview_discussion_guide.challenges_to_discuss?.length > 0) {
+        content += `\n### Challenges to Discuss\n`
+        analysis.interview_discussion_guide.challenges_to_discuss.forEach((c: any) => {
+          content += `\n**Challenge:** ${c.challenge}
+**Solution:** ${c.solution}
+**Learning:** ${c.learning}\n`
+        })
+      }
+
+      if (analysis.interview_discussion_guide.advanced_discussion_topics?.length > 0) {
+        content += `\n**Advanced Discussion Topics:**
+${analysis.interview_discussion_guide.advanced_discussion_topics?.map((t: string) => `- ${t}`).join("\n")}\n\n`
+      }
+    }
+
+    // Full analysis includes presentation improvements and enhancements
+    if (focus === "all") {
+      if (analysis.presentation_improvements) {
+        content += `## 📝 Presentation Improvements
+
+### README Assessment
+**Current Quality:** ${analysis.presentation_improvements.readme_assessment?.current_quality}
+
+**Missing Elements:**
+${analysis.presentation_improvements.readme_assessment?.missing_elements?.map((e: string) => `- ${e}`).join("\n")}
+
+**Suggested README Structure:**
+${analysis.presentation_improvements.readme_assessment?.suggested_structure?.map((s: string, i: number) => `${i + 1}. ${s}`).join("\n")}
+
+### Suggested Content
+
+**Title:** ${analysis.presentation_improvements.suggested_readme_content?.title_and_tagline}
+
+**Description:** ${analysis.presentation_improvements.suggested_readme_content?.description}
+
+**Key Features:**
+${analysis.presentation_improvements.suggested_readme_content?.key_features?.map((f: string) => `- ${f}`).join("\n")}
+
+**Tech Stack:** ${analysis.presentation_improvements.suggested_readme_content?.tech_stack_presentation}
+
+### Demo Recommendations
+**What to Show:**
+${analysis.presentation_improvements.demo_recommendations?.what_to_show?.map((s: string) => `- ${s}`).join("\n")}
+
+**Demo Flow:** ${analysis.presentation_improvements.demo_recommendations?.demo_flow}
+
+**Talking Points:**
+${analysis.presentation_improvements.demo_recommendations?.talking_points_during_demo?.map((p: string) => `- ${p}`).join("\n")}\n\n`
+      }
+
+      if (analysis.enhancement_suggestions?.length > 0) {
+        content += `## 🚀 Enhancement Suggestions\n`
+        analysis.enhancement_suggestions.forEach((suggestion: any, i: number) => {
+          content += `\n### ${i + 1}. ${suggestion.suggestion} (${suggestion.priority} priority)
+**Impact:** ${suggestion.impact}
+**Effort:** ${suggestion.effort}
+**Implementation Hints:** ${suggestion.implementation_hints}\n`
+        })
+      }
+
+      if (analysis.portfolio_value) {
+        content += `\n## 💼 Portfolio Value
+
+**Current Score:** ${analysis.portfolio_value.current_score}/10
+**Value for Job Search:** ${analysis.portfolio_value.value_for_job_search}
+
+**Best Used For:**
+${analysis.portfolio_value.best_used_for?.map((u: string) => `- ${u}`).join("\n")}
+
+**Demonstrates Fit For:**
+${analysis.portfolio_value.roles_this_demonstrates_fit_for?.map((r: string) => `- ${r}`).join("\n")}`
+      }
+    }
+
+    return content
+  }
+
   const handleClearHistory = () => {
     setChatHistory([])
     
@@ -417,8 +674,15 @@ ${analysis.job_search_strategy?.map((s: string) => `- ${s}`).join("\n")}`
     if (profile) {
       const studentKey = profile.id.toString()
       const allChats = loadGithubChats()
-      delete allChats[studentKey]
-      saveGithubChats(allChats)
+      
+      if (allChats[studentKey]) {
+        if (activeTab === "overall") {
+          allChats[studentKey].overall = { messages: [], expiresAt: Date.now() + CHAT_EXPIRY_MS }
+        } else {
+          allChats[studentKey].repository = { messages: [], expiresAt: Date.now() + CHAT_EXPIRY_MS }
+        }
+        saveGithubChats(allChats)
+      }
     }
     
     toast({
@@ -468,10 +732,26 @@ ${analysis.job_search_strategy?.map((s: string) => `- ${s}`).join("\n")}`
                 </Button>
               </div>
             ) : (
-              <>
-                {/* Chat History */}
-                <ScrollArea className="flex-1 p-8 overflow-y-auto h-full">
-                  {chatHistory.length === 0 ? (
+              <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as TabType)} className="flex-1 flex flex-col min-h-0">
+                <div className="border-b-2 px-6 pt-4 flex-shrink-0">
+                  <TabsList className="grid w-full max-w-md grid-cols-2">
+                    <TabsTrigger value="overall" className="gap-2">
+                      <Sparkles className="h-4 w-4" />
+                      Overall Analysis
+                    </TabsTrigger>
+                    <TabsTrigger value="repository" className="gap-2">
+                      <Code2 className="h-4 w-4" />
+                      Repository Analysis
+                    </TabsTrigger>
+                  </TabsList>
+                </div>
+
+                <TabsContent value="overall" className="flex-1 flex flex-col m-0 data-[state=active]:flex overflow-hidden">
+                  {/* Overall Analysis Content */}
+                  <div className="flex-1 overflow-hidden">
+                    <ScrollArea className="h-full p-8">
+                      <div className="pb-4">
+                        {overallChatHistory.length === 0 ? (
                     <div className="flex flex-col items-center justify-center h-full min-h-[400px] p-4">
                       <div className="max-w-4xl w-full space-y-6">
                         {/* Header Section */}
@@ -680,7 +960,9 @@ ${analysis.job_search_strategy?.map((s: string) => `- ${s}`).join("\n")}`
                       )}
                     </div>
                   )}
-                </ScrollArea>
+                      </div>
+                    </ScrollArea>
+                  </div>
 
                 {/* Analysis Controls */}
                 <div className="p-4 border-t-2 flex-shrink-0 bg-background">
@@ -753,7 +1035,273 @@ ${analysis.job_search_strategy?.map((s: string) => `- ${s}`).join("\n")}`
                     {analysisTypeDescriptions[selectedAnalysisType]}
                   </p>
                 </div>
-              </>
+                </TabsContent>
+
+                {/* Repository Analysis Tab */}
+                <TabsContent value="repository" className="flex-1 flex flex-col m-0 data-[state=active]:flex overflow-hidden">
+                  <div className="flex-1 overflow-hidden">
+                    <ScrollArea className="h-full p-8">
+                      <div className="pb-4">
+                        {repositoryChatHistory.length === 0 ? (
+                      <div className="flex flex-col items-center justify-center h-full min-h-[400px] p-4">
+                        <div className="max-w-3xl w-full space-y-6">
+                          {/* Header Section */}
+                          <div className="text-center space-y-3">
+                            <div className="flex items-center justify-center gap-2">
+                              <Code2 className="h-8 w-8 text-primary" />
+                              <h2 className="text-2xl font-bold">Analyze a Repository</h2>
+                            </div>
+                            <p className="text-muted-foreground">
+                              Get detailed insights about a specific project from your portfolio
+                            </p>
+                          </div>
+
+                          {/* Repository Input Section */}
+                          <Card className="border-2">
+                            <CardHeader>
+                              <CardTitle className="text-base">Select Repository</CardTitle>
+                              <CardDescription>
+                                Enter or select a repository name to analyze
+                              </CardDescription>
+                            </CardHeader>
+                            <CardContent className="space-y-4">
+                              <div className="flex gap-2">
+                                <div className="flex-1">
+                                  {loadingRepos ? (
+                                    <div className="flex items-center justify-center p-3 border-2 rounded-md bg-muted">
+                                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                                      <span className="text-sm text-muted-foreground">Loading repositories...</span>
+                                    </div>
+                                  ) : availableRepos.length > 0 ? (
+                                    <Select value={repoName} onValueChange={setRepoName}>
+                                      <SelectTrigger className="border-2">
+                                        <SelectValue placeholder="Select a repository" />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        {availableRepos.map((repo) => (
+                                          <SelectItem key={repo} value={repo}>
+                                            <div className="flex items-center gap-2">
+                                              <Code2 className="h-4 w-4" />
+                                              {repo}
+                                            </div>
+                                          </SelectItem>
+                                        ))}
+                                      </SelectContent>
+                                    </Select>
+                                  ) : (
+                                    <Input
+                                      placeholder="e.g., instagram-scraper"
+                                      value={repoName}
+                                      onChange={(e) => setRepoName(e.target.value)}
+                                      className="border-2"
+                                    />
+                                  )}
+                                </div>
+                                {availableRepos.length === 0 && !loadingRepos && (
+                                  <Button
+                                    variant="outline"
+                                    size="icon"
+                                    onClick={fetchAvailableRepos}
+                                    title="Load repositories"
+                                  >
+                                    <Search className="h-4 w-4" />
+                                  </Button>
+                                )}
+                              </div>
+
+                              {/* Analysis Focus Selection */}
+                              <div className="space-y-2">
+                                <label className="text-sm font-medium">Analysis Focus</label>
+                                <div className="grid grid-cols-2 gap-2">
+                                  <Button
+                                    variant={selectedAnalysisFocus === "interview" ? "default" : "outline"}
+                                    onClick={() => setSelectedAnalysisFocus("interview")}
+                                    className="justify-start"
+                                  >
+                                    <MessageSquare className="h-4 w-4 mr-2" />
+                                    Interview Prep
+                                  </Button>
+                                  <Button
+                                    variant={selectedAnalysisFocus === "all" ? "default" : "outline"}
+                                    onClick={() => setSelectedAnalysisFocus("all")}
+                                    className="justify-start"
+                                  >
+                                    <Sparkles className="h-4 w-4 mr-2" />
+                                    Complete Analysis
+                                  </Button>
+                                </div>
+                                <p className="text-xs text-muted-foreground">
+                                  {selectedAnalysisFocus === "interview"
+                                    ? "Focus on interview preparation and talking points"
+                                    : "Comprehensive analysis including improvements and portfolio value"}
+                                </p>
+                              </div>
+                            </CardContent>
+                          </Card>
+
+                          {/* Call to Action */}
+                          <div className="text-center">
+                            <Button
+                              size="lg"
+                              onClick={handleAnalysisRequest}
+                              disabled={loading || !repoName.trim()}
+                              className="border-2 px-8"
+                            >
+                              {loading ? (
+                                <>
+                                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                                  Analyzing Repository...
+                                </>
+                              ) : (
+                                <>
+                                  <Code2 className="h-4 w-4 mr-2" />
+                                  Analyze Repository
+                                </>
+                              )}
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="space-y-6">
+                        {repositoryChatHistory.map((message, index) => (
+                          <div key={index} className="space-y-4">
+                            {message.role === "user" ? (
+                              <div className="flex justify-end">
+                                <div className="max-w-[85%] rounded-lg p-5 bg-primary text-primary-foreground shadow-md border-2 border-primary/20">
+                                  <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                                  <p className="text-xs mt-2 opacity-70">
+                                    {message.timestamp.toLocaleTimeString([], {
+                                      hour: "2-digit",
+                                      minute: "2-digit",
+                                    })}
+                                  </p>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="flex justify-start">
+                                <div className="max-w-[85%] space-y-2">
+                                  <div className="bg-secondary rounded-lg p-5 border-2 shadow-sm">
+                                    <div className="prose prose-sm dark:prose-invert max-w-none">
+                                      <ReactMarkdown
+                                        components={{
+                                          p: ({ children }) => <p className="mb-3 last:mb-0 leading-relaxed">{children}</p>,
+                                          ul: ({ children }) => <ul className="my-3 ml-4 list-disc space-y-2">{children}</ul>,
+                                          ol: ({ children }) => <ol className="my-3 ml-4 list-decimal space-y-2">{children}</ol>,
+                                          li: ({ children }) => <li className="leading-relaxed">{children}</li>,
+                                          strong: ({ children }) => <strong className="font-semibold text-primary">{children}</strong>,
+                                          em: ({ children }) => <em className="italic">{children}</em>,
+                                          code: ({ children }) => <code className="bg-muted px-1.5 py-0.5 rounded text-xs font-mono">{children}</code>,
+                                          h1: ({ children }) => <h1 className="text-lg font-bold mb-2 mt-4 first:mt-0">{children}</h1>,
+                                          h2: ({ children }) => <h2 className="text-base font-bold mb-2 mt-3 first:mt-0">{children}</h2>,
+                                          h3: ({ children }) => <h3 className="text-sm font-bold mb-2 mt-3 first:mt-0">{children}</h3>,
+                                          blockquote: ({ children }) => <blockquote className="border-l-2 border-primary pl-3 my-3 italic">{children}</blockquote>,
+                                        }}
+                                      >
+                                        {message.content}
+                                      </ReactMarkdown>
+                                    </div>
+                                  </div>
+                                  <p className="text-xs text-muted-foreground pl-2">
+                                    {message.timestamp.toLocaleTimeString([], {
+                                      hour: "2-digit",
+                                      minute: "2-digit",
+                                    })}
+                                  </p>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                        {loading && (
+                          <div className="flex justify-start">
+                            <div className="bg-secondary rounded-lg p-5 border-2 shadow-sm">
+                              <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                      </div>
+                    </ScrollArea>
+                  </div>
+
+                  {/* Repository Analysis Controls */}
+                  <div className="p-4 border-t-2 flex-shrink-0 bg-background">
+                    {repositoryChatHistory.length > 0 && (
+                      <div className="mb-2 flex justify-between items-center">
+                        <div className="flex gap-2">
+                          {loadingRepos ? (
+                            <div className="flex items-center justify-center p-2 border-2 rounded-md bg-muted w-64">
+                              <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                              <span className="text-sm">Loading...</span>
+                            </div>
+                          ) : availableRepos.length > 0 ? (
+                            <Select value={repoName} onValueChange={setRepoName}>
+                              <SelectTrigger className="w-64 border-2">
+                                <SelectValue placeholder="Select repository" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {availableRepos.map((repo) => (
+                                  <SelectItem key={repo} value={repo}>
+                                    <div className="flex items-center gap-2">
+                                      <Code2 className="h-4 w-4" />
+                                      {repo}
+                                    </div>
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          ) : (
+                            <div className="flex gap-2">
+                              <Input
+                                placeholder="Repository name"
+                                value={repoName}
+                                onChange={(e) => setRepoName(e.target.value)}
+                                className="border-2 w-64"
+                              />
+                              <Button
+                                variant="outline"
+                                size="icon"
+                                onClick={fetchAvailableRepos}
+                                title="Load repositories"
+                              >
+                                <Search className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          )}
+                          <Select
+                            value={selectedAnalysisFocus}
+                            onValueChange={(value) => setSelectedAnalysisFocus(value as AnalysisFocus)}
+                          >
+                            <SelectTrigger className="w-48 border-2">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="interview">Interview Prep</SelectItem>
+                              <SelectItem value="all">Complete Analysis</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <Button
+                            onClick={handleAnalysisRequest}
+                            disabled={loading || !repoName.trim()}
+                            variant="default"
+                          >
+                            Analyze
+                          </Button>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={handleClearHistory}
+                        >
+                          Clear History
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                </TabsContent>
+              </Tabs>
             )}
           </CardContent>
         </Card>
