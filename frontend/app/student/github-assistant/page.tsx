@@ -1612,64 +1612,68 @@ ${analysis.portfolio_value.roles_this_demonstrates_fit_for?.map((r: string) => `
           <CardHeader>
             <CardTitle className="text-sm flex items-center gap-2">
               <Sparkles className="h-4 w-4" />
-              Analysis Modes
+              How It Works
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-3 text-sm">
+          <CardContent className="space-y-4 text-sm">
             <div>
-              <p className="font-medium">⚡ Quick Summary</p>
-              <p className="text-xs text-muted-foreground">
-                30-second overview of technical identity, standout projects, and key skills
+              <div className="flex items-center gap-2 mb-1">
+                <Sparkles className="h-4 w-4 text-primary" />
+                <p className="font-semibold">Overall Analysis</p>
+              </div>
+              <p className="text-xs text-muted-foreground mb-2">
+                Analyze your entire GitHub profile and career readiness
               </p>
+              <div className="space-y-1.5 ml-6">
+                <p className="text-xs"><span className="font-medium">⚡ Quick Summary:</span> 30-sec profile overview</p>
+                <p className="text-xs"><span className="font-medium">🎤 Interview Prep:</span> Talking points & questions</p>
+                <p className="text-xs"><span className="font-medium">📝 Resume Builder:</span> ATS-optimized content</p>
+                <p className="text-xs"><span className="font-medium">🎯 Job Fit:</span> Best matching roles</p>
+              </div>
             </div>
-            <div>
-              <p className="font-medium">🎤 Interview Prep</p>
-              <p className="text-xs text-muted-foreground">
-                Elevator pitches, project talking points, and likely interview questions
+            
+            <div className="border-t pt-3">
+              <div className="flex items-center gap-2 mb-1">
+                <Code2 className="h-4 w-4 text-primary" />
+                <p className="font-semibold">Repository Analysis</p>
+              </div>
+              <p className="text-xs text-muted-foreground mb-2">
+                Deep dive into a specific project from your portfolio
               </p>
+              <div className="space-y-1.5 ml-6">
+                <p className="text-xs"><span className="font-medium">🎤 Interview Prep:</span> Project talking points</p>
+                <p className="text-xs"><span className="font-medium">📋 Complete Analysis:</span> Full technical review</p>
+              </div>
             </div>
-            <div>
-              <p className="font-medium">📝 Resume Builder</p>
-              <p className="text-xs text-muted-foreground">
-                Professional summaries, bullet points, and ATS-optimized keywords
+            
+            <div className="border-t pt-3">
+              <div className="flex items-center gap-2 mb-1">
+                <Briefcase className="h-4 w-4 text-primary" />
+                <p className="font-semibold">Job Fit Analysis</p>
+              </div>
+              <p className="text-xs text-muted-foreground mb-2">
+                See how your profile matches specific job roles
               </p>
-            </div>
-            <div>
-              <p className="font-medium">🎯 Job Fit Analysis</p>
-              <p className="text-xs text-muted-foreground">
-                Ideal job titles, target industries, and salary expectations
-              </p>
+              <div className="space-y-1.5 ml-6">
+                <p className="text-xs">• Skills gap analysis</p>
+                <p className="text-xs">• Relevant projects showcase</p>
+                <p className="text-xs">• Learning roadmap</p>
+                <p className="text-xs">• Application strategy</p>
+              </div>
             </div>
           </CardContent>
         </Card>
 
         <Card className="border-2">
-          <CardHeader>
-            <CardTitle className="text-sm">Quick Tips</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3 text-sm">
+          {/* <CardHeader>
+            <CardTitle className="text-sm">💡Quick Tips</CardTitle>
+          </CardHeader> */}
+          <CardContent className="text-sm">
             <div>
-              <p className="font-medium">Start with Quick Summary</p>
+              <p className="font-semibold">💡 Quick Tips</p>
+              <p className="font-medium"> Start with Overall Analysis</p>
               <p className="text-xs text-muted-foreground">
-                Get an overview of your technical profile first
-              </p>
-            </div>
-            <div>
-              <p className="font-medium">Use Interview Prep Before Interviews</p>
-              <p className="text-xs text-muted-foreground">
-                Practice your talking points and prepare answers
-              </p>
-            </div>
-            <div>
-              <p className="font-medium">Update Your Resume</p>
-              <p className="text-xs text-muted-foreground">
-                Use the resume analysis to improve your content
-              </p>
-            </div>
-            <div>
-              <p className="font-medium">Check Job Fit Regularly</p>
-              <p className="text-xs text-muted-foreground">
-                Understand which roles match your skills best
+                Use Quick Summary to understand your technical profile first
               </p>
             </div>
           </CardContent>
