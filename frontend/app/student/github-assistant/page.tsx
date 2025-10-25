@@ -12,7 +12,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Loader2, Send, Bot, Github, MessageSquare, Sparkles } from "lucide-react"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Loader2, Send, Bot, Github, MessageSquare, Sparkles, Briefcase, Code2, Search } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import ReactMarkdown from "react-markdown"
 
@@ -31,12 +32,24 @@ interface UserProfile {
 
 interface GithubChatHistory {
   [studentId: string]: {
-    messages: ChatMessage[]
-    expiresAt: number
+    overall: {
+      messages: ChatMessage[]
+      expiresAt: number
+    }
+    repository: {
+      messages: ChatMessage[]
+      expiresAt: number
+    }
+    jobFit: {
+      messages: ChatMessage[]
+      expiresAt: number
+    }
   }
 }
 
 type AnalysisType = "quick" | "interview_prep" | "resume" | "job_fit"
+type AnalysisFocus = "all" | "interview"
+type TabType = "overall" | "repository" | "job-fit"
 
 // LocalStorage utilities for chat persistence
 const GITHUB_CHAT_STORAGE_KEY = "github_assistant_chats"
@@ -55,13 +68,41 @@ const loadGithubChats = (): GithubChatHistory => {
     // Filter out expired chats silently
     const filtered: GithubChatHistory = {}
     Object.keys(parsed).forEach((studentId) => {
-      if (parsed[studentId].expiresAt > now) {
-        filtered[studentId] = {
-          ...parsed[studentId],
-          messages: parsed[studentId].messages.map(msg => ({
-            ...msg,
-            timestamp: new Date(msg.timestamp)
-          }))
+      const studentData = parsed[studentId]
+      
+      // Handle both old and new formats
+      if (studentData.overall && studentData.repository) {
+        // New format
+        if (studentData.overall.expiresAt > now || studentData.repository.expiresAt > now || studentData.jobFit?.expiresAt > now) {
+          filtered[studentId] = {
+            overall: {
+              messages: studentData.overall.expiresAt > now 
+                ? studentData.overall.messages.map(msg => ({
+                    ...msg,
+                    timestamp: new Date(msg.timestamp)
+                  }))
+                : [],
+              expiresAt: studentData.overall.expiresAt
+            },
+            repository: {
+              messages: studentData.repository.expiresAt > now
+                ? studentData.repository.messages.map(msg => ({
+                    ...msg,
+                    timestamp: new Date(msg.timestamp)
+                  }))
+                : [],
+              expiresAt: studentData.repository.expiresAt
+            },
+            jobFit: {
+              messages: studentData.jobFit && studentData.jobFit.expiresAt > now
+                ? studentData.jobFit.messages.map(msg => ({
+                    ...msg,
+                    timestamp: new Date(msg.timestamp)
+                  }))
+                : [],
+              expiresAt: studentData.jobFit?.expiresAt || Date.now() + CHAT_EXPIRY_MS
+            }
+          }
         }
       }
     })
@@ -100,11 +141,22 @@ const analysisTypeDescriptions: Record<AnalysisType, string> = {
 export default function GithubAssistantPage() {
   const { toast } = useToast()
   const [currentMessage, setCurrentMessage] = useState("")
-  const [chatHistory, setChatHistory] = useState<ChatMessage[]>([])
+  const [overallChatHistory, setOverallChatHistory] = useState<ChatMessage[]>([])
+  const [repositoryChatHistory, setRepositoryChatHistory] = useState<ChatMessage[]>([])
+  const [jobFitChatHistory, setJobFitChatHistory] = useState<ChatMessage[]>([])
   const [loading, setLoading] = useState(false)
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [profileLoading, setProfileLoading] = useState(true)
   const [selectedAnalysisType, setSelectedAnalysisType] = useState<AnalysisType>("quick")
+  const [selectedAnalysisFocus, setSelectedAnalysisFocus] = useState<AnalysisFocus>("interview")
+  const [activeTab, setActiveTab] = useState<TabType>("overall")
+  const [repoName, setRepoName] = useState("")
+  const [targetRole, setTargetRole] = useState("")
+  const [availableRepos, setAvailableRepos] = useState<string[]>([])
+  const [loadingRepos, setLoadingRepos] = useState(false)
+
+  const chatHistory = activeTab === "overall" ? overallChatHistory : activeTab === "repository" ? repositoryChatHistory : jobFitChatHistory
+  const setChatHistory = activeTab === "overall" ? setOverallChatHistory : activeTab === "repository" ? setRepositoryChatHistory : setJobFitChatHistory
 
   useEffect(() => {
     fetchProfile()
@@ -116,26 +168,52 @@ export default function GithubAssistantPage() {
       const studentKey = profile.id.toString()
       const allChats = loadGithubChats()
       
-      if (allChats[studentKey] && allChats[studentKey].messages) {
-        setChatHistory(allChats[studentKey].messages)
+      if (allChats[studentKey]) {
+        if (allChats[studentKey].overall?.messages) {
+          setOverallChatHistory(allChats[studentKey].overall.messages)
+        }
+        if (allChats[studentKey].repository?.messages) {
+          setRepositoryChatHistory(allChats[studentKey].repository.messages)
+        }
+        if (allChats[studentKey].jobFit?.messages) {
+          setJobFitChatHistory(allChats[studentKey].jobFit.messages)
+        }
       }
     }
   }, [profile])
   
   // Save chat history to localStorage whenever it changes
   useEffect(() => {
-    if (profile && chatHistory.length > 0) {
+    if (profile && (overallChatHistory.length > 0 || repositoryChatHistory.length > 0 || jobFitChatHistory.length > 0)) {
       const studentKey = profile.id.toString()
       const allChats = loadGithubChats()
       
-      allChats[studentKey] = {
-        messages: chatHistory,
+      if (!allChats[studentKey]) {
+        allChats[studentKey] = {
+          overall: { messages: [], expiresAt: Date.now() + CHAT_EXPIRY_MS },
+          repository: { messages: [], expiresAt: Date.now() + CHAT_EXPIRY_MS },
+          jobFit: { messages: [], expiresAt: Date.now() + CHAT_EXPIRY_MS }
+        }
+      }
+      
+      allChats[studentKey].overall = {
+        messages: overallChatHistory,
+        expiresAt: Date.now() + CHAT_EXPIRY_MS
+      }
+      
+      allChats[studentKey].repository = {
+        messages: repositoryChatHistory,
+        expiresAt: Date.now() + CHAT_EXPIRY_MS
+      }
+      
+      allChats[studentKey].jobFit = {
+        messages: jobFitChatHistory,
         expiresAt: Date.now() + CHAT_EXPIRY_MS
       }
       
       saveGithubChats(allChats)
     }
-  }, [chatHistory, profile])
+  }, [overallChatHistory, repositoryChatHistory, jobFitChatHistory, profile])
 
   const fetchProfile = async () => {
     try {
@@ -153,32 +231,106 @@ export default function GithubAssistantPage() {
     }
   }
 
+  const fetchAvailableRepos = async () => {
+    if (!profile?.id) return
+    
+    setLoadingRepos(true)
+    try {
+      const response = await fetch(`/api/ai/github-repos?student_id=${profile.id}`)
+      if (!response.ok) throw new Error("Failed to fetch repos")
+      
+      const data = await response.json()
+      setAvailableRepos(data.repos || [])
+    } catch (error) {
+      console.error("Error fetching repos:", error)
+      toast({
+        title: "Error",
+        description: "Failed to load available repositories",
+        variant: "destructive",
+      })
+    } finally {
+      setLoadingRepos(false)
+    }
+  }
+
+  useEffect(() => {
+    if (profile && activeTab === "repository" && availableRepos.length === 0) {
+      fetchAvailableRepos()
+    }
+  }, [profile, activeTab])
+
   const handleAnalysisRequest = async () => {
     if (!profile || !profile.github_username) return
+    if (activeTab === "repository" && !repoName.trim()) {
+      toast({
+        title: "Repository Required",
+        description: "Please enter a repository name",
+        variant: "destructive",
+      })
+      return
+    }
+    if (activeTab === "job-fit" && !targetRole.trim()) {
+      toast({
+        title: "Target Role Required",
+        description: "Please enter a target job role",
+        variant: "destructive",
+      })
+      return
+    }
 
     setLoading(true)
 
     // Add user message to history
     const userMessage: ChatMessage = {
       role: "user",
-      content: `Generate ${analysisTypeLabels[selectedAnalysisType]} analysis`,
+      content: activeTab === "overall" 
+        ? `Generate ${analysisTypeLabels[selectedAnalysisType]} analysis`
+        : activeTab === "repository"
+        ? `Analyze ${repoName} - ${selectedAnalysisFocus === "all" ? "Complete Analysis" : "Interview Preparation"}`
+        : `Analyze fit for ${targetRole} role`,
       timestamp: new Date(),
-      analysisType: selectedAnalysisType,
+      analysisType: activeTab === "overall" ? selectedAnalysisType : undefined,
     }
     setChatHistory((prev) => [...prev, userMessage])
 
     try {
-      const response = await fetch("/api/ai/github-analysis", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          student_id: profile.id.toString(),
-          github_username: profile.github_username,
-          analysis_type: selectedAnalysisType,
-        }),
-      })
+      let response
+      if (activeTab === "overall") {
+        response = await fetch("/api/ai/github-analysis", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            student_id: profile.id.toString(),
+            github_username: profile.github_username,
+            analysis_type: selectedAnalysisType,
+          }),
+        })
+      } else if (activeTab === "repository") {
+        response = await fetch("/api/ai/github-repo-analysis", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            student_id: profile.id.toString(),
+            repo_name: repoName,
+            analysis_focus: selectedAnalysisFocus,
+          }),
+        })
+      } else {
+        response = await fetch("/api/ai/github-job-fit", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            student_id: profile.id.toString(),
+            target_role: targetRole,
+          }),
+        })
+      }
 
       if (!response.ok) {
         throw new Error("Failed to get GitHub analysis")
@@ -187,13 +339,17 @@ export default function GithubAssistantPage() {
       const data = await response.json()
 
       // Format the response based on analysis type
-      const formattedContent = formatAnalysisResponse(data.analysis, selectedAnalysisType)
+      const formattedContent = activeTab === "overall"
+        ? formatAnalysisResponse(data.analysis, selectedAnalysisType)
+        : activeTab === "repository"
+        ? formatRepositoryAnalysis(data.analysis, selectedAnalysisFocus)
+        : formatJobFitAnalysis(data.analysis)
 
       const aiMessage: ChatMessage = {
         role: "assistant",
         content: formattedContent,
         timestamp: new Date(),
-        analysisType: selectedAnalysisType,
+        analysisType: activeTab === "overall" ? selectedAnalysisType : undefined,
       }
 
       setChatHistory((prev) => [...prev, aiMessage])
@@ -201,7 +357,11 @@ export default function GithubAssistantPage() {
       console.error("GitHub analysis error:", error)
       const errorMessage: ChatMessage = {
         role: "assistant",
-        content: "Sorry, I couldn't analyze your GitHub profile. Please make sure your GitHub username is set in your profile and try again.",
+        content: activeTab === "overall"
+          ? "Sorry, I couldn't analyze your GitHub profile. Please make sure your GitHub username is set in your profile and try again."
+          : activeTab === "repository"
+          ? "Sorry, I couldn't analyze this repository. Please make sure the repository name is correct and try again."
+          : "Sorry, I couldn't analyze the job fit. Please try again.",
         timestamp: new Date(),
       }
       setChatHistory((prev) => [...prev, errorMessage])
@@ -410,6 +570,235 @@ ${analysis.job_search_strategy?.map((s: string) => `- ${s}`).join("\n")}`
     return content
   }
 
+  const formatRepositoryAnalysis = (analysis: any, focus: AnalysisFocus) => {
+    if (!analysis) return "No analysis data received."
+
+    let content = `# Repository Analysis\n\n`
+
+    // Project Overview
+    if (analysis.project_overview) {
+      content += `## 📋 Project Overview
+
+**One-liner:** ${analysis.project_overview.one_liner}
+
+${analysis.project_overview.detailed_summary}
+
+**Problem Statement:** ${analysis.project_overview.problem_statement}
+
+**Solution Approach:** ${analysis.project_overview.solution_approach}
+
+**Target Users:** ${analysis.project_overview.target_users}
+
+**Real-world Application:** ${analysis.project_overview.real_world_application}\n\n`
+    }
+
+    // Technical Deep Dive
+    if (analysis.technical_deep_dive) {
+      content += `## 🔧 Technical Deep Dive
+
+**Architecture:** ${analysis.technical_deep_dive.architecture}
+
+**Design Patterns:** ${analysis.technical_deep_dive.design_patterns?.join(", ")}
+
+### Technology Choices\n`
+      
+      analysis.technical_deep_dive.technology_choices?.forEach((tech: any) => {
+        content += `\n**${tech.technology}**
+- Why Good Choice: ${tech.why_good_choice}
+- Alternatives: ${tech.alternatives?.join(", ")}\n`
+      })
+
+      content += `\n**Code Quality Score:** ${analysis.technical_deep_dive.code_quality_assessment?.score}/10
+
+**Strengths:**
+${analysis.technical_deep_dive.code_quality_assessment?.strengths?.map((s: string) => `- ${s}`).join("\n")}
+
+**Areas for Improvement:**
+${analysis.technical_deep_dive.code_quality_assessment?.areas_for_improvement?.map((a: string) => `- ${a}`).join("\n")}
+
+**Scalability:** ${analysis.technical_deep_dive.scalability_analysis}
+
+**Security:** ${analysis.technical_deep_dive.security_considerations}
+
+**Complexity:** ${analysis.technical_deep_dive.complexity_rating}\n\n`
+    }
+
+    // Interview Discussion Guide (always shown but especially for interview focus)
+    if (analysis.interview_discussion_guide) {
+      content += `## 🎤 Interview Discussion Guide
+
+**Elevator Pitch:** ${analysis.interview_discussion_guide.elevator_pitch}
+
+**Key Talking Points:**
+${analysis.interview_discussion_guide.key_talking_points?.map((p: string) => `- ${p}`).join("\n")}
+
+### Expected Technical Questions\n`
+
+      analysis.interview_discussion_guide.technical_questions_to_expect?.forEach((q: any, i: number) => {
+        content += `\n**Q${i + 1}: ${q.question}**
+*Suggested Answer:* ${q.suggested_answer}\n`
+      })
+
+      if (analysis.interview_discussion_guide.challenges_to_discuss?.length > 0) {
+        content += `\n### Challenges to Discuss\n`
+        analysis.interview_discussion_guide.challenges_to_discuss.forEach((c: any) => {
+          content += `\n**Challenge:** ${c.challenge}
+**Solution:** ${c.solution}
+**Learning:** ${c.learning}\n`
+        })
+      }
+
+      if (analysis.interview_discussion_guide.advanced_discussion_topics?.length > 0) {
+        content += `\n**Advanced Discussion Topics:**
+${analysis.interview_discussion_guide.advanced_discussion_topics?.map((t: string) => `- ${t}`).join("\n")}\n\n`
+      }
+    }
+
+    // Full analysis includes presentation improvements and enhancements
+    if (focus === "all") {
+      if (analysis.presentation_improvements) {
+        content += `## 📝 Presentation Improvements
+
+### README Assessment
+**Current Quality:** ${analysis.presentation_improvements.readme_assessment?.current_quality}
+
+**Missing Elements:**
+${analysis.presentation_improvements.readme_assessment?.missing_elements?.map((e: string) => `- ${e}`).join("\n")}
+
+**Suggested README Structure:**
+${analysis.presentation_improvements.readme_assessment?.suggested_structure?.map((s: string, i: number) => `${i + 1}. ${s}`).join("\n")}
+
+### Suggested Content
+
+**Title:** ${analysis.presentation_improvements.suggested_readme_content?.title_and_tagline}
+
+**Description:** ${analysis.presentation_improvements.suggested_readme_content?.description}
+
+**Key Features:**
+${analysis.presentation_improvements.suggested_readme_content?.key_features?.map((f: string) => `- ${f}`).join("\n")}
+
+**Tech Stack:** ${analysis.presentation_improvements.suggested_readme_content?.tech_stack_presentation}
+
+### Demo Recommendations
+**What to Show:**
+${analysis.presentation_improvements.demo_recommendations?.what_to_show?.map((s: string) => `- ${s}`).join("\n")}
+
+**Demo Flow:** ${analysis.presentation_improvements.demo_recommendations?.demo_flow}
+
+**Talking Points:**
+${analysis.presentation_improvements.demo_recommendations?.talking_points_during_demo?.map((p: string) => `- ${p}`).join("\n")}\n\n`
+      }
+
+      if (analysis.enhancement_suggestions?.length > 0) {
+        content += `## 🚀 Enhancement Suggestions\n`
+        analysis.enhancement_suggestions.forEach((suggestion: any, i: number) => {
+          content += `\n### ${i + 1}. ${suggestion.suggestion} (${suggestion.priority} priority)
+**Impact:** ${suggestion.impact}
+**Effort:** ${suggestion.effort}
+**Implementation Hints:** ${suggestion.implementation_hints}\n`
+        })
+      }
+
+      if (analysis.portfolio_value) {
+        content += `\n## 💼 Portfolio Value
+
+**Current Score:** ${analysis.portfolio_value.current_score}/10
+**Value for Job Search:** ${analysis.portfolio_value.value_for_job_search}
+
+**Best Used For:**
+${analysis.portfolio_value.best_used_for?.map((u: string) => `- ${u}`).join("\n")}
+
+**Demonstrates Fit For:**
+${analysis.portfolio_value.roles_this_demonstrates_fit_for?.map((r: string) => `- ${r}`).join("\n")}`
+      }
+    }
+
+    return content
+  }
+
+  const formatJobFitAnalysis = (analysis: any) => {
+    if (!analysis) return "No analysis data received."
+
+    let content = `# Job Fit Analysis for ${targetRole}\n\n`
+
+    // Role Requirements
+    if (analysis.role_requirements) {
+      content += `## 📋 Role Requirements\n\n`
+      
+      content += `### Must-Have Skills\n`
+      content += analysis.role_requirements.must_have_skills?.map((skill: string) => `- ${skill}`).join("\n")
+      
+      content += `\n\n### Nice-to-Have Skills\n`
+      content += analysis.role_requirements.nice_to_have_skills?.map((skill: string) => `- ${skill}`).join("\n")
+      
+      content += `\n\n### Typical Projects\n`
+      content += analysis.role_requirements.typical_projects?.map((project: string) => `- ${project}`).join("\n")
+      content += `\n\n`
+    }
+
+    // Gap Analysis
+    if (analysis.gap_analysis) {
+      content += `## 📊 Gap Analysis\n\n`
+      content += `**Overall Fit Score:** ${analysis.gap_analysis.overall_fit_score}/10\n\n`
+      
+      content += `### ✅ Skills You Have\n`
+      content += analysis.gap_analysis.has?.map((skill: string) => `- ${skill}`).join("\n")
+      
+      content += `\n\n### ⚠️ Missing Critical Skills\n`
+      content += analysis.gap_analysis.missing_critical?.map((skill: string) => `- ${skill}`).join("\n")
+      
+      content += `\n\n### 💡 Missing Nice-to-Have Skills\n`
+      content += analysis.gap_analysis.missing_nice_to_have?.map((skill: string) => `- ${skill}`).join("\n")
+      content += `\n\n`
+    }
+
+    // Projects that Demonstrate Fit
+    if (analysis.projects_that_demonstrate_fit?.length > 0) {
+      content += `## 💼 Your Projects That Demonstrate Fit\n\n`
+      analysis.projects_that_demonstrate_fit.forEach((project: any) => {
+        content += `### ${project.project}\n`
+        content += `**Relevant Skills:** ${project.relevant_skills?.join(", ")}\n\n`
+        content += `**How to Present:** ${project.how_to_present}\n\n`
+      })
+    }
+
+    // Skill Building Roadmap
+    if (analysis.skill_building_roadmap?.length > 0) {
+      content += `## 🎯 Skill Building Roadmap\n\n`
+      analysis.skill_building_roadmap.forEach((item: any, index: number) => {
+        content += `### ${index + 1}. ${item.skill} (${item.priority} priority)\n`
+        content += `**Why Important:** ${item.why_important}\n\n`
+        content += `**How to Learn:** ${item.how_to_learn}\n\n`
+        content += `**Project Idea:** ${item.project_idea}\n\n`
+        content += `**Timeline:** ${item.timeline}\n\n`
+      })
+    }
+
+    // Current Competitiveness
+    if (analysis.current_competitiveness) {
+      content += `## 🏆 Current Competitiveness\n\n`
+      content += `**Rating:** ${analysis.current_competitiveness.rating}\n\n`
+      content += `**Reasoning:** ${analysis.current_competitiveness.reasoning}\n\n`
+      content += `**Percentile Estimate:** ${analysis.current_competitiveness.percentile_estimate}\n\n`
+    }
+
+    // Application Strategy
+    if (analysis.application_strategy) {
+      content += `## 🎯 Application Strategy\n\n`
+      content += `**Should Apply Now:** ${analysis.application_strategy.should_apply_now}\n\n`
+      content += `**Reasoning:** ${analysis.application_strategy.reasoning}\n\n`
+      content += `**How to Position Yourself:** ${analysis.application_strategy.how_to_position_yourself}\n\n`
+      
+      content += `### Resume Focus\n`
+      content += analysis.application_strategy.resume_focus?.map((item: string) => `- ${item}`).join("\n")
+      
+      content += `\n\n### Interview Preparation Focus\n`
+      content += analysis.application_strategy.interview_preparation_focus?.map((item: string) => `- ${item}`).join("\n")
+    }
+
+    return content
+  }
+
   const handleClearHistory = () => {
     setChatHistory([])
     
@@ -417,8 +806,17 @@ ${analysis.job_search_strategy?.map((s: string) => `- ${s}`).join("\n")}`
     if (profile) {
       const studentKey = profile.id.toString()
       const allChats = loadGithubChats()
-      delete allChats[studentKey]
-      saveGithubChats(allChats)
+      
+      if (allChats[studentKey]) {
+        if (activeTab === "overall") {
+          allChats[studentKey].overall = { messages: [], expiresAt: Date.now() + CHAT_EXPIRY_MS }
+        } else if (activeTab === "repository") {
+          allChats[studentKey].repository = { messages: [], expiresAt: Date.now() + CHAT_EXPIRY_MS }
+        } else {
+          allChats[studentKey].jobFit = { messages: [], expiresAt: Date.now() + CHAT_EXPIRY_MS }
+        }
+        saveGithubChats(allChats)
+      }
     }
     
     toast({
@@ -468,20 +866,176 @@ ${analysis.job_search_strategy?.map((s: string) => `- ${s}`).join("\n")}`
                 </Button>
               </div>
             ) : (
-              <>
-                {/* Chat History */}
-                <ScrollArea className="flex-1 p-8 overflow-y-auto h-full">
-                  {chatHistory.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center h-full text-center space-y-4 min-h-[400px]">
-                      <MessageSquare className="h-16 w-16 text-muted-foreground/50" />
-                      <div className="space-y-2">
-                        <h3 className="text-lg font-semibold">Start Your Analysis</h3>
-                        <p className="text-sm text-muted-foreground max-w-md">
-                          Select an analysis mode below and click "Analyze" to get personalized insights based on your GitHub profile.
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          Analyzing: <span className="font-mono font-semibold">{profile.github_username}</span>
-                        </p>
+              <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as TabType)} className="flex-1 flex flex-col min-h-0">
+                <div className="border-b-2 px-6 pt-4 flex-shrink-0">
+                  <TabsList className="grid w-full max-w-2xl grid-cols-3">
+                    <TabsTrigger value="overall" className="gap-2">
+                      <Sparkles className="h-4 w-4" />
+                      Overall Analysis
+                    </TabsTrigger>
+                    <TabsTrigger value="repository" className="gap-2">
+                      <Code2 className="h-4 w-4" />
+                      Repository Analysis
+                    </TabsTrigger>
+                    <TabsTrigger value="job-fit" className="gap-2">
+                      <Briefcase className="h-4 w-4" />
+                      Job Fit Analysis
+                    </TabsTrigger>
+                  </TabsList>
+                </div>
+
+                <TabsContent value="overall" className="flex-1 flex flex-col m-0 data-[state=active]:flex overflow-hidden">
+                  {/* Overall Analysis Content */}
+                  <div className="flex-1 overflow-hidden">
+                    <ScrollArea className="h-full p-8">
+                      <div className="pb-4">
+                        {overallChatHistory.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center h-full min-h-[400px] p-4">
+                      <div className="max-w-4xl w-full space-y-6">
+                        {/* Header Section */}
+                        <div className="text-center space-y-3">
+                          <div className="flex items-center justify-center gap-2">
+                            <Github className="h-8 w-8 text-primary" />
+                            <h2 className="text-2xl font-bold">Analyze Your GitHub Profile</h2>
+                          </div>
+                          <p className="text-muted-foreground">
+                            Select an analysis mode to get personalized career insights for{" "}
+                            <span className="font-mono font-semibold text-primary">@{profile.github_username}</span>
+                          </p>
+                        </div>
+
+                        {/* Analysis Mode Cards Grid */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-8">
+                          {/* Quick Summary Card */}
+                          <Card 
+                            className={`cursor-pointer transition-all border-2 hover:border-primary hover:shadow-lg ${
+                              selectedAnalysisType === "quick" ? "border-primary shadow-md bg-primary/5" : ""
+                            }`}
+                            onClick={() => setSelectedAnalysisType("quick")}
+                          >
+                            <CardHeader className="pb-3">
+                              <div className="flex items-start gap-3">
+                                <div className="p-2 rounded-lg bg-primary/10">
+                                  <Sparkles className="h-5 w-5 text-primary" />
+                                </div>
+                                <div className="flex-1">
+                                  <CardTitle className="text-base">Quick Summary</CardTitle>
+                                  <CardDescription className="text-xs mt-1">
+                                    30 seconds • Essential overview
+                                  </CardDescription>
+                                </div>
+                              </div>
+                            </CardHeader>
+                            <CardContent className="pb-4">
+                              <p className="text-sm text-muted-foreground">
+                                Get a snapshot of your technical identity, standout projects, key skills, and job readiness assessment.
+                              </p>
+                            </CardContent>
+                          </Card>
+
+                          {/* Interview Prep Card */}
+                          <Card 
+                            className={`cursor-pointer transition-all border-2 hover:border-primary hover:shadow-lg ${
+                              selectedAnalysisType === "interview_prep" ? "border-primary shadow-md bg-primary/5" : ""
+                            }`}
+                            onClick={() => setSelectedAnalysisType("interview_prep")}
+                          >
+                            <CardHeader className="pb-3">
+                              <div className="flex items-start gap-3">
+                                <div className="p-2 rounded-lg bg-primary/10">
+                                  <MessageSquare className="h-5 w-5 text-primary" />
+                                </div>
+                                <div className="flex-1">
+                                  <CardTitle className="text-base">Interview Preparation</CardTitle>
+                                  <CardDescription className="text-xs mt-1">
+                                    5 minutes • Practice & prepare
+                                  </CardDescription>
+                                </div>
+                              </div>
+                            </CardHeader>
+                            <CardContent className="pb-4">
+                              <p className="text-sm text-muted-foreground">
+                                Craft your elevator pitch, prepare project talking points, and practice likely interview questions.
+                              </p>
+                            </CardContent>
+                          </Card>
+
+                          {/* Resume Content Card */}
+                          <Card 
+                            className={`cursor-pointer transition-all border-2 hover:border-primary hover:shadow-lg ${
+                              selectedAnalysisType === "resume" ? "border-primary shadow-md bg-primary/5" : ""
+                            }`}
+                            onClick={() => setSelectedAnalysisType("resume")}
+                          >
+                            <CardHeader className="pb-3">
+                              <div className="flex items-start gap-3">
+                                <div className="p-2 rounded-lg bg-primary/10">
+                                  <Bot className="h-5 w-5 text-primary" />
+                                </div>
+                                <div className="flex-1">
+                                  <CardTitle className="text-base">Resume Builder</CardTitle>
+                                  <CardDescription className="text-xs mt-1">
+                                    3 minutes • Professional content
+                                  </CardDescription>
+                                </div>
+                              </div>
+                            </CardHeader>
+                            <CardContent className="pb-4">
+                              <p className="text-sm text-muted-foreground">
+                                Generate professional summaries, achievement bullet points, and ATS-optimized keywords from your projects.
+                              </p>
+                            </CardContent>
+                          </Card>
+
+                          {/* Job Fit Card */}
+                          <Card 
+                            className={`cursor-pointer transition-all border-2 hover:border-primary hover:shadow-lg ${
+                              selectedAnalysisType === "job_fit" ? "border-primary shadow-md bg-primary/5" : ""
+                            }`}
+                            onClick={() => setSelectedAnalysisType("job_fit")}
+                          >
+                            <CardHeader className="pb-3">
+                              <div className="flex items-start gap-3">
+                                <div className="p-2 rounded-lg bg-primary/10">
+                                  <Briefcase className="h-5 w-5 text-primary" />
+                                </div>
+                                <div className="flex-1">
+                                  <CardTitle className="text-base">Job Fit Analysis</CardTitle>
+                                  <CardDescription className="text-xs mt-1">
+                                    4 minutes • Career guidance
+                                  </CardDescription>
+                                </div>
+                              </div>
+                            </CardHeader>
+                            <CardContent className="pb-4">
+                              <p className="text-sm text-muted-foreground">
+                                Discover ideal job titles, target industries, salary expectations, and competitive positioning.
+                              </p>
+                            </CardContent>
+                          </Card>
+                        </div>
+
+                        {/* Call to Action */}
+                        <div className="text-center pt-4">
+                          <Button 
+                            size="lg" 
+                            onClick={handleAnalysisRequest}
+                            disabled={loading}
+                            className="border-2 px-8"
+                          >
+                            {loading ? (
+                              <>
+                                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                                Analyzing GitHub Profile...
+                              </>
+                            ) : (
+                              <>
+                                <Sparkles className="h-4 w-4 mr-2" />
+                                Start {analysisTypeLabels[selectedAnalysisType]} Analysis
+                              </>
+                            )}
+                          </Button>
+                        </div>
                       </div>
                     </div>
                   ) : (
@@ -544,7 +1098,9 @@ ${analysis.job_search_strategy?.map((s: string) => `- ${s}`).join("\n")}`
                       )}
                     </div>
                   )}
-                </ScrollArea>
+                      </div>
+                    </ScrollArea>
+                  </div>
 
                 {/* Analysis Controls */}
                 <div className="p-4 border-t-2 flex-shrink-0 bg-background">
@@ -617,7 +1173,434 @@ ${analysis.job_search_strategy?.map((s: string) => `- ${s}`).join("\n")}`
                     {analysisTypeDescriptions[selectedAnalysisType]}
                   </p>
                 </div>
-              </>
+                </TabsContent>
+
+                {/* Repository Analysis Tab */}
+                <TabsContent value="repository" className="flex-1 flex flex-col m-0 data-[state=active]:flex overflow-hidden">
+                  <div className="flex-1 overflow-hidden">
+                    <ScrollArea className="h-full p-8">
+                      <div className="pb-4">
+                        {repositoryChatHistory.length === 0 ? (
+                      <div className="flex flex-col items-center justify-center h-full min-h-[400px] p-4">
+                        <div className="max-w-3xl w-full space-y-6">
+                          {/* Header Section */}
+                          <div className="text-center space-y-3">
+                            <div className="flex items-center justify-center gap-2">
+                              <Code2 className="h-8 w-8 text-primary" />
+                              <h2 className="text-2xl font-bold">Analyze a Repository</h2>
+                            </div>
+                            <p className="text-muted-foreground">
+                              Get detailed insights about a specific project from your portfolio
+                            </p>
+                          </div>
+
+                          {/* Repository Input Section */}
+                          <Card className="border-2">
+                            <CardHeader>
+                              <CardTitle className="text-base">Select Repository</CardTitle>
+                              <CardDescription>
+                                Enter or select a repository name to analyze
+                              </CardDescription>
+                            </CardHeader>
+                            <CardContent className="space-y-4">
+                              <div className="flex gap-2">
+                                <div className="flex-1">
+                                  {loadingRepos ? (
+                                    <div className="flex items-center justify-center p-3 border-2 rounded-md bg-muted">
+                                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                                      <span className="text-sm text-muted-foreground">Loading repositories...</span>
+                                    </div>
+                                  ) : availableRepos.length > 0 ? (
+                                    <Select value={repoName} onValueChange={setRepoName}>
+                                      <SelectTrigger className="border-2">
+                                        <SelectValue placeholder="Select a repository" />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        {availableRepos.map((repo) => (
+                                          <SelectItem key={repo} value={repo}>
+                                            <div className="flex items-center gap-2">
+                                              <Code2 className="h-4 w-4" />
+                                              {repo}
+                                            </div>
+                                          </SelectItem>
+                                        ))}
+                                      </SelectContent>
+                                    </Select>
+                                  ) : (
+                                    <Input
+                                      placeholder="e.g., instagram-scraper"
+                                      value={repoName}
+                                      onChange={(e) => setRepoName(e.target.value)}
+                                      className="border-2"
+                                    />
+                                  )}
+                                </div>
+                                {availableRepos.length === 0 && !loadingRepos && (
+                                  <Button
+                                    variant="outline"
+                                    size="icon"
+                                    onClick={fetchAvailableRepos}
+                                    title="Load repositories"
+                                  >
+                                    <Search className="h-4 w-4" />
+                                  </Button>
+                                )}
+                              </div>
+
+                              {/* Analysis Focus Selection */}
+                              <div className="space-y-2">
+                                <label className="text-sm font-medium">Analysis Focus</label>
+                                <div className="grid grid-cols-2 gap-2">
+                                  <Button
+                                    variant={selectedAnalysisFocus === "interview" ? "default" : "outline"}
+                                    onClick={() => setSelectedAnalysisFocus("interview")}
+                                    className="justify-start"
+                                  >
+                                    <MessageSquare className="h-4 w-4 mr-2" />
+                                    Interview Prep
+                                  </Button>
+                                  <Button
+                                    variant={selectedAnalysisFocus === "all" ? "default" : "outline"}
+                                    onClick={() => setSelectedAnalysisFocus("all")}
+                                    className="justify-start"
+                                  >
+                                    <Sparkles className="h-4 w-4 mr-2" />
+                                    Complete Analysis
+                                  </Button>
+                                </div>
+                                <p className="text-xs text-muted-foreground">
+                                  {selectedAnalysisFocus === "interview"
+                                    ? "Focus on interview preparation and talking points"
+                                    : "Comprehensive analysis including improvements and portfolio value"}
+                                </p>
+                              </div>
+                            </CardContent>
+                          </Card>
+
+                          {/* Call to Action */}
+                          <div className="text-center">
+                            <Button
+                              size="lg"
+                              onClick={handleAnalysisRequest}
+                              disabled={loading || !repoName.trim()}
+                              className="border-2 px-8"
+                            >
+                              {loading ? (
+                                <>
+                                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                                  Analyzing Repository...
+                                </>
+                              ) : (
+                                <>
+                                  <Code2 className="h-4 w-4 mr-2" />
+                                  Analyze Repository
+                                </>
+                              )}
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="space-y-6">
+                        {repositoryChatHistory.map((message, index) => (
+                          <div key={index} className="space-y-4">
+                            {message.role === "user" ? (
+                              <div className="flex justify-end">
+                                <div className="max-w-[85%] rounded-lg p-5 bg-primary text-primary-foreground shadow-md border-2 border-primary/20">
+                                  <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                                  <p className="text-xs mt-2 opacity-70">
+                                    {message.timestamp.toLocaleTimeString([], {
+                                      hour: "2-digit",
+                                      minute: "2-digit",
+                                    })}
+                                  </p>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="flex justify-start">
+                                <div className="max-w-[85%] space-y-2">
+                                  <div className="bg-secondary rounded-lg p-5 border-2 shadow-sm">
+                                    <div className="prose prose-sm dark:prose-invert max-w-none">
+                                      <ReactMarkdown
+                                        components={{
+                                          p: ({ children }) => <p className="mb-3 last:mb-0 leading-relaxed">{children}</p>,
+                                          ul: ({ children }) => <ul className="my-3 ml-4 list-disc space-y-2">{children}</ul>,
+                                          ol: ({ children }) => <ol className="my-3 ml-4 list-decimal space-y-2">{children}</ol>,
+                                          li: ({ children }) => <li className="leading-relaxed">{children}</li>,
+                                          strong: ({ children }) => <strong className="font-semibold text-primary">{children}</strong>,
+                                          em: ({ children }) => <em className="italic">{children}</em>,
+                                          code: ({ children }) => <code className="bg-muted px-1.5 py-0.5 rounded text-xs font-mono">{children}</code>,
+                                          h1: ({ children }) => <h1 className="text-lg font-bold mb-2 mt-4 first:mt-0">{children}</h1>,
+                                          h2: ({ children }) => <h2 className="text-base font-bold mb-2 mt-3 first:mt-0">{children}</h2>,
+                                          h3: ({ children }) => <h3 className="text-sm font-bold mb-2 mt-3 first:mt-0">{children}</h3>,
+                                          blockquote: ({ children }) => <blockquote className="border-l-2 border-primary pl-3 my-3 italic">{children}</blockquote>,
+                                        }}
+                                      >
+                                        {message.content}
+                                      </ReactMarkdown>
+                                    </div>
+                                  </div>
+                                  <p className="text-xs text-muted-foreground pl-2">
+                                    {message.timestamp.toLocaleTimeString([], {
+                                      hour: "2-digit",
+                                      minute: "2-digit",
+                                    })}
+                                  </p>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                        {loading && (
+                          <div className="flex justify-start">
+                            <div className="bg-secondary rounded-lg p-5 border-2 shadow-sm">
+                              <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                      </div>
+                    </ScrollArea>
+                  </div>
+
+                  {/* Repository Analysis Controls */}
+                  <div className="p-4 border-t-2 flex-shrink-0 bg-background">
+                    {repositoryChatHistory.length > 0 && (
+                      <div className="mb-2 flex justify-between items-center">
+                        <div className="flex gap-2">
+                          {loadingRepos ? (
+                            <div className="flex items-center justify-center p-2 border-2 rounded-md bg-muted w-64">
+                              <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                              <span className="text-sm">Loading...</span>
+                            </div>
+                          ) : availableRepos.length > 0 ? (
+                            <Select value={repoName} onValueChange={setRepoName}>
+                              <SelectTrigger className="w-64 border-2">
+                                <SelectValue placeholder="Select repository" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {availableRepos.map((repo) => (
+                                  <SelectItem key={repo} value={repo}>
+                                    <div className="flex items-center gap-2">
+                                      <Code2 className="h-4 w-4" />
+                                      {repo}
+                                    </div>
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          ) : (
+                            <div className="flex gap-2">
+                              <Input
+                                placeholder="Repository name"
+                                value={repoName}
+                                onChange={(e) => setRepoName(e.target.value)}
+                                className="border-2 w-64"
+                              />
+                              <Button
+                                variant="outline"
+                                size="icon"
+                                onClick={fetchAvailableRepos}
+                                title="Load repositories"
+                              >
+                                <Search className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          )}
+                          <Select
+                            value={selectedAnalysisFocus}
+                            onValueChange={(value) => setSelectedAnalysisFocus(value as AnalysisFocus)}
+                          >
+                            <SelectTrigger className="w-48 border-2">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="interview">Interview Prep</SelectItem>
+                              <SelectItem value="all">Complete Analysis</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <Button
+                            onClick={handleAnalysisRequest}
+                            disabled={loading || !repoName.trim()}
+                            variant="default"
+                          >
+                            Analyze
+                          </Button>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={handleClearHistory}
+                        >
+                          Clear History
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                </TabsContent>
+
+                {/* Job Fit Analysis Tab */}
+                <TabsContent value="job-fit" className="flex-1 flex flex-col m-0 data-[state=active]:flex overflow-hidden">
+                  <div className="flex-1 overflow-hidden">
+                    <ScrollArea className="h-full p-8">
+                      <div className="pb-4">
+                        {jobFitChatHistory.length === 0 ? (
+                          <div className="flex flex-col items-center justify-center h-full min-h-[400px] p-4">
+                            <div className="max-w-3xl w-full space-y-6">
+                              {/* Header Section */}
+                              <div className="text-center space-y-3">
+                                <div className="flex items-center justify-center gap-2">
+                                  <Briefcase className="h-8 w-8 text-primary" />
+                                  <h2 className="text-2xl font-bold">Analyze Job Fit</h2>
+                                </div>
+                                <p className="text-muted-foreground">
+                                  See how well your GitHub profile matches a specific role
+                                </p>
+                              </div>
+
+                              {/* Target Role Input Section */}
+                              <Card className="border-2">
+                                <CardHeader>
+                                  <CardTitle className="text-base">Target Role</CardTitle>
+                                  <CardDescription>
+                                    Enter the job role you're interested in
+                                  </CardDescription>
+                                </CardHeader>
+                                <CardContent className="space-y-4">
+                                  <div className="space-y-2">
+                                    <Input
+                                      placeholder="e.g., Full Stack Developer"
+                                      value={targetRole}
+                                      onChange={(e) => setTargetRole(e.target.value)}
+                                      className="border-2"
+                                    />
+                                    <p className="text-xs text-muted-foreground">
+                                      Common roles: Frontend Developer, Backend Developer, Full Stack Developer, 
+                                      Data Scientist, Machine Learning Engineer, Mobile Developer, DevOps Engineer
+                                    </p>
+                                  </div>
+                                </CardContent>
+                              </Card>
+
+                              {/* Call to Action */}
+                              <div className="text-center">
+                                <Button
+                                  size="lg"
+                                  onClick={handleAnalysisRequest}
+                                  disabled={loading || !targetRole.trim()}
+                                  className="border-2 px-8"
+                                >
+                                  {loading ? (
+                                    <>
+                                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                                      Analyzing Job Fit...
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Briefcase className="h-4 w-4 mr-2" />
+                                      Analyze Job Fit
+                                    </>
+                                  )}
+                                </Button>
+                              </div>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="space-y-6">
+                            {jobFitChatHistory.map((message, index) => (
+                              <div key={index} className="space-y-4">
+                                {message.role === "user" ? (
+                                  <div className="flex justify-end">
+                                    <div className="max-w-[85%] rounded-lg p-5 bg-primary text-primary-foreground shadow-md border-2 border-primary/20">
+                                      <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                                      <p className="text-xs mt-2 opacity-70">
+                                        {message.timestamp.toLocaleTimeString([], {
+                                          hour: "2-digit",
+                                          minute: "2-digit",
+                                        })}
+                                      </p>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <div className="flex justify-start">
+                                    <div className="max-w-[85%] space-y-2">
+                                      <div className="bg-secondary rounded-lg p-5 border-2 shadow-sm">
+                                        <div className="prose prose-sm dark:prose-invert max-w-none">
+                                          <ReactMarkdown
+                                            components={{
+                                              p: ({ children }) => <p className="mb-3 last:mb-0 leading-relaxed">{children}</p>,
+                                              ul: ({ children }) => <ul className="my-3 ml-4 list-disc space-y-2">{children}</ul>,
+                                              ol: ({ children }) => <ol className="my-3 ml-4 list-decimal space-y-2">{children}</ol>,
+                                              li: ({ children }) => <li className="leading-relaxed">{children}</li>,
+                                              strong: ({ children }) => <strong className="font-semibold text-primary">{children}</strong>,
+                                              em: ({ children }) => <em className="italic">{children}</em>,
+                                              code: ({ children }) => <code className="bg-muted px-1.5 py-0.5 rounded text-xs font-mono">{children}</code>,
+                                              h1: ({ children }) => <h1 className="text-lg font-bold mb-2 mt-4 first:mt-0">{children}</h1>,
+                                              h2: ({ children }) => <h2 className="text-base font-bold mb-2 mt-3 first:mt-0">{children}</h2>,
+                                              h3: ({ children }) => <h3 className="text-sm font-bold mb-2 mt-3 first:mt-0">{children}</h3>,
+                                              blockquote: ({ children }) => <blockquote className="border-l-2 border-primary pl-3 my-3 italic">{children}</blockquote>,
+                                            }}
+                                          >
+                                            {message.content}
+                                          </ReactMarkdown>
+                                        </div>
+                                      </div>
+                                      <p className="text-xs text-muted-foreground pl-2">
+                                        {message.timestamp.toLocaleTimeString([], {
+                                          hour: "2-digit",
+                                          minute: "2-digit",
+                                        })}
+                                      </p>
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                            {loading && (
+                              <div className="flex justify-start">
+                                <div className="bg-secondary rounded-lg p-5 border-2 shadow-sm">
+                                  <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </ScrollArea>
+                  </div>
+
+                  {/* Job Fit Analysis Controls */}
+                  <div className="p-4 border-t-2 flex-shrink-0 bg-background">
+                    {jobFitChatHistory.length > 0 && (
+                      <div className="mb-2 flex justify-between items-center">
+                        <div className="flex gap-2">
+                          <Input
+                            placeholder="e.g., Full Stack Developer"
+                            value={targetRole}
+                            onChange={(e) => setTargetRole(e.target.value)}
+                            className="border-2 w-80"
+                          />
+                          <Button
+                            onClick={handleAnalysisRequest}
+                            disabled={loading || !targetRole.trim()}
+                            variant="default"
+                          >
+                            Analyze
+                          </Button>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={handleClearHistory}
+                        >
+                          Clear History
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                </TabsContent>
+              </Tabs>
             )}
           </CardContent>
         </Card>
@@ -629,64 +1612,68 @@ ${analysis.job_search_strategy?.map((s: string) => `- ${s}`).join("\n")}`
           <CardHeader>
             <CardTitle className="text-sm flex items-center gap-2">
               <Sparkles className="h-4 w-4" />
-              Analysis Modes
+              How It Works
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-3 text-sm">
+          <CardContent className="space-y-4 text-sm">
             <div>
-              <p className="font-medium">⚡ Quick Summary</p>
-              <p className="text-xs text-muted-foreground">
-                30-second overview of technical identity, standout projects, and key skills
+              <div className="flex items-center gap-2 mb-1">
+                <Sparkles className="h-4 w-4 text-primary" />
+                <p className="font-semibold">Overall Analysis</p>
+              </div>
+              <p className="text-xs text-muted-foreground mb-2">
+                Analyze your entire GitHub profile and career readiness
               </p>
+              <div className="space-y-1.5 ml-6">
+                <p className="text-xs"><span className="font-medium">⚡ Quick Summary:</span> 30-sec profile overview</p>
+                <p className="text-xs"><span className="font-medium">🎤 Interview Prep:</span> Talking points & questions</p>
+                <p className="text-xs"><span className="font-medium">📝 Resume Builder:</span> ATS-optimized content</p>
+                <p className="text-xs"><span className="font-medium">🎯 Job Fit:</span> Best matching roles</p>
+              </div>
             </div>
-            <div>
-              <p className="font-medium">🎤 Interview Prep</p>
-              <p className="text-xs text-muted-foreground">
-                Elevator pitches, project talking points, and likely interview questions
+            
+            <div className="border-t pt-3">
+              <div className="flex items-center gap-2 mb-1">
+                <Code2 className="h-4 w-4 text-primary" />
+                <p className="font-semibold">Repository Analysis</p>
+              </div>
+              <p className="text-xs text-muted-foreground mb-2">
+                Deep dive into a specific project from your portfolio
               </p>
+              <div className="space-y-1.5 ml-6">
+                <p className="text-xs"><span className="font-medium">🎤 Interview Prep:</span> Project talking points</p>
+                <p className="text-xs"><span className="font-medium">📋 Complete Analysis:</span> Full technical review</p>
+              </div>
             </div>
-            <div>
-              <p className="font-medium">📝 Resume Builder</p>
-              <p className="text-xs text-muted-foreground">
-                Professional summaries, bullet points, and ATS-optimized keywords
+            
+            <div className="border-t pt-3">
+              <div className="flex items-center gap-2 mb-1">
+                <Briefcase className="h-4 w-4 text-primary" />
+                <p className="font-semibold">Job Fit Analysis</p>
+              </div>
+              <p className="text-xs text-muted-foreground mb-2">
+                See how your profile matches specific job roles
               </p>
-            </div>
-            <div>
-              <p className="font-medium">🎯 Job Fit Analysis</p>
-              <p className="text-xs text-muted-foreground">
-                Ideal job titles, target industries, and salary expectations
-              </p>
+              <div className="space-y-1.5 ml-6">
+                <p className="text-xs">• Skills gap analysis</p>
+                <p className="text-xs">• Relevant projects showcase</p>
+                <p className="text-xs">• Learning roadmap</p>
+                <p className="text-xs">• Application strategy</p>
+              </div>
             </div>
           </CardContent>
         </Card>
 
         <Card className="border-2">
-          <CardHeader>
-            <CardTitle className="text-sm">Quick Tips</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3 text-sm">
+          {/* <CardHeader>
+            <CardTitle className="text-sm">💡Quick Tips</CardTitle>
+          </CardHeader> */}
+          <CardContent className="text-sm">
             <div>
-              <p className="font-medium">Start with Quick Summary</p>
+              <p className="font-semibold">💡 Quick Tips</p>
+              <p className="font-medium"> Start with Overall Analysis</p>
               <p className="text-xs text-muted-foreground">
-                Get an overview of your technical profile first
-              </p>
-            </div>
-            <div>
-              <p className="font-medium">Use Interview Prep Before Interviews</p>
-              <p className="text-xs text-muted-foreground">
-                Practice your talking points and prepare answers
-              </p>
-            </div>
-            <div>
-              <p className="font-medium">Update Your Resume</p>
-              <p className="text-xs text-muted-foreground">
-                Use the resume analysis to improve your content
-              </p>
-            </div>
-            <div>
-              <p className="font-medium">Check Job Fit Regularly</p>
-              <p className="text-xs text-muted-foreground">
-                Understand which roles match your skills best
+                Use Quick Summary to understand your technical profile first
               </p>
             </div>
           </CardContent>
