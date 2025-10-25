@@ -12,7 +12,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Loader2, Send, Bot, Github, MessageSquare, Sparkles } from "lucide-react"
+import { Loader2, Send, Bot, Github, MessageSquare, Sparkles, Briefcase } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import ReactMarkdown from "react-markdown"
 
@@ -472,16 +472,152 @@ ${analysis.job_search_strategy?.map((s: string) => `- ${s}`).join("\n")}`
                 {/* Chat History */}
                 <ScrollArea className="flex-1 p-8 overflow-y-auto h-full">
                   {chatHistory.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center h-full text-center space-y-4 min-h-[400px]">
-                      <MessageSquare className="h-16 w-16 text-muted-foreground/50" />
-                      <div className="space-y-2">
-                        <h3 className="text-lg font-semibold">Start Your Analysis</h3>
-                        <p className="text-sm text-muted-foreground max-w-md">
-                          Select an analysis mode below and click "Analyze" to get personalized insights based on your GitHub profile.
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          Analyzing: <span className="font-mono font-semibold">{profile.github_username}</span>
-                        </p>
+                    <div className="flex flex-col items-center justify-center h-full min-h-[400px] p-4">
+                      <div className="max-w-4xl w-full space-y-6">
+                        {/* Header Section */}
+                        <div className="text-center space-y-3">
+                          <div className="flex items-center justify-center gap-2">
+                            <Github className="h-8 w-8 text-primary" />
+                            <h2 className="text-2xl font-bold">Analyze Your GitHub Profile</h2>
+                          </div>
+                          <p className="text-muted-foreground">
+                            Select an analysis mode to get personalized career insights for{" "}
+                            <span className="font-mono font-semibold text-primary">@{profile.github_username}</span>
+                          </p>
+                        </div>
+
+                        {/* Analysis Mode Cards Grid */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-8">
+                          {/* Quick Summary Card */}
+                          <Card 
+                            className={`cursor-pointer transition-all border-2 hover:border-primary hover:shadow-lg ${
+                              selectedAnalysisType === "quick" ? "border-primary shadow-md bg-primary/5" : ""
+                            }`}
+                            onClick={() => setSelectedAnalysisType("quick")}
+                          >
+                            <CardHeader className="pb-3">
+                              <div className="flex items-start gap-3">
+                                <div className="p-2 rounded-lg bg-primary/10">
+                                  <Sparkles className="h-5 w-5 text-primary" />
+                                </div>
+                                <div className="flex-1">
+                                  <CardTitle className="text-base">Quick Summary</CardTitle>
+                                  <CardDescription className="text-xs mt-1">
+                                    30 seconds • Essential overview
+                                  </CardDescription>
+                                </div>
+                              </div>
+                            </CardHeader>
+                            <CardContent className="pb-4">
+                              <p className="text-sm text-muted-foreground">
+                                Get a snapshot of your technical identity, standout projects, key skills, and job readiness assessment.
+                              </p>
+                            </CardContent>
+                          </Card>
+
+                          {/* Interview Prep Card */}
+                          <Card 
+                            className={`cursor-pointer transition-all border-2 hover:border-primary hover:shadow-lg ${
+                              selectedAnalysisType === "interview_prep" ? "border-primary shadow-md bg-primary/5" : ""
+                            }`}
+                            onClick={() => setSelectedAnalysisType("interview_prep")}
+                          >
+                            <CardHeader className="pb-3">
+                              <div className="flex items-start gap-3">
+                                <div className="p-2 rounded-lg bg-primary/10">
+                                  <MessageSquare className="h-5 w-5 text-primary" />
+                                </div>
+                                <div className="flex-1">
+                                  <CardTitle className="text-base">Interview Preparation</CardTitle>
+                                  <CardDescription className="text-xs mt-1">
+                                    5 minutes • Practice & prepare
+                                  </CardDescription>
+                                </div>
+                              </div>
+                            </CardHeader>
+                            <CardContent className="pb-4">
+                              <p className="text-sm text-muted-foreground">
+                                Craft your elevator pitch, prepare project talking points, and practice likely interview questions.
+                              </p>
+                            </CardContent>
+                          </Card>
+
+                          {/* Resume Content Card */}
+                          <Card 
+                            className={`cursor-pointer transition-all border-2 hover:border-primary hover:shadow-lg ${
+                              selectedAnalysisType === "resume" ? "border-primary shadow-md bg-primary/5" : ""
+                            }`}
+                            onClick={() => setSelectedAnalysisType("resume")}
+                          >
+                            <CardHeader className="pb-3">
+                              <div className="flex items-start gap-3">
+                                <div className="p-2 rounded-lg bg-primary/10">
+                                  <Bot className="h-5 w-5 text-primary" />
+                                </div>
+                                <div className="flex-1">
+                                  <CardTitle className="text-base">Resume Builder</CardTitle>
+                                  <CardDescription className="text-xs mt-1">
+                                    3 minutes • Professional content
+                                  </CardDescription>
+                                </div>
+                              </div>
+                            </CardHeader>
+                            <CardContent className="pb-4">
+                              <p className="text-sm text-muted-foreground">
+                                Generate professional summaries, achievement bullet points, and ATS-optimized keywords from your projects.
+                              </p>
+                            </CardContent>
+                          </Card>
+
+                          {/* Job Fit Card */}
+                          <Card 
+                            className={`cursor-pointer transition-all border-2 hover:border-primary hover:shadow-lg ${
+                              selectedAnalysisType === "job_fit" ? "border-primary shadow-md bg-primary/5" : ""
+                            }`}
+                            onClick={() => setSelectedAnalysisType("job_fit")}
+                          >
+                            <CardHeader className="pb-3">
+                              <div className="flex items-start gap-3">
+                                <div className="p-2 rounded-lg bg-primary/10">
+                                  <Briefcase className="h-5 w-5 text-primary" />
+                                </div>
+                                <div className="flex-1">
+                                  <CardTitle className="text-base">Job Fit Analysis</CardTitle>
+                                  <CardDescription className="text-xs mt-1">
+                                    4 minutes • Career guidance
+                                  </CardDescription>
+                                </div>
+                              </div>
+                            </CardHeader>
+                            <CardContent className="pb-4">
+                              <p className="text-sm text-muted-foreground">
+                                Discover ideal job titles, target industries, salary expectations, and competitive positioning.
+                              </p>
+                            </CardContent>
+                          </Card>
+                        </div>
+
+                        {/* Call to Action */}
+                        <div className="text-center pt-4">
+                          <Button 
+                            size="lg" 
+                            onClick={handleAnalysisRequest}
+                            disabled={loading}
+                            className="border-2 px-8"
+                          >
+                            {loading ? (
+                              <>
+                                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                                Analyzing GitHub Profile...
+                              </>
+                            ) : (
+                              <>
+                                <Sparkles className="h-4 w-4 mr-2" />
+                                Start {analysisTypeLabels[selectedAnalysisType]} Analysis
+                              </>
+                            )}
+                          </Button>
+                        </div>
                       </div>
                     </div>
                   ) : (
