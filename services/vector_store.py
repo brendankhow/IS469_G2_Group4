@@ -381,12 +381,15 @@ class VectorStore:
     ) -> List[Dict]:
         """
         Store multiple graph nodes in a single batch insert.
-        Each node dictionary must include 'id', 'text', 'embedding', and optionally 'student_id' and 'metadata'.
+
         """
         data_batch = [
             {
                 "node_id": node["id"],
                 "student_id": node.get("student_id", "unknown"),
+                "student_name": node.get("student_name", "Unknown"),
+                "student_email": node.get("student_email", "Unknown"),
+                "github_username": node.get("github_username", "unknown"),
                 "text": node["text"],
                 "embedding": node["embedding"],
                 "metadata": node.get("metadata", {})
@@ -406,7 +409,13 @@ class VectorStore:
     ) -> List[Dict]:
         """
         Search for relevant graph nodes (chunks/entities) globally across all students.
-        Optional filters can restrict results by skills, roles, or other metadata.
+        Optional filters can restrict results by skills, roles, language, or source.
+        
+        Supported filters:
+        - filter_skill: Filter by skills
+        - filter_role: Filter by role
+        - filter_language: Filter by programming language (e.g., "JavaScript", "Python")
+        - filter_source: Filter by source type ("resume" or "github")
         """
 
         params = {
@@ -415,12 +424,16 @@ class VectorStore:
             "match_count": top_k
         }
 
-        # Handle optional filters (filter_skill and filter_role)
+        # handling of optional filters
         if filters:
             if 'filter_skill' in filters:
-                 params['filter_skill'] = filters['filter_skill']
+                params['filter_skill'] = filters['filter_skill']
             if 'filter_role' in filters:
-                 params['filter_role'] = filters['filter_role']
+                params['filter_role'] = filters['filter_role']
+            if 'filter_language' in filters:
+                params['filter_language'] = filters['filter_language']
+            if 'filter_source' in filters:
+                params['filter_source'] = filters['filter_source']
             
         try:
             print(f"Executing RPC match_graph_nodes with params: {list(params.keys())}")
@@ -451,41 +464,59 @@ class VectorStore:
     @staticmethod
     def get_all_candidates_documents() -> List[Dict]:
         """
-        Get all candidate documents (resumes and GitHub repos) for GraphRAG indexing.
+        Get all candidate documents (resumes and GitHub repos) and info for GraphRAG indexing.
         Returns documents in a format compatible with GraphRAG processing.
         """
         all_documents = []
-        
+
         # get all resume documents
+
         resume_response = supabase.table("resume_embeddings")\
-            .select("student_id, resume_text, filename")\
+            .select("student_id, resume_text, filename, metadata, student_name, student_email")\
             .execute()
-        
+
         for resume in resume_response.data:
+            # skip empty resumes
+            if not resume.get('resume_text') or not resume['resume_text'].strip():
+                continue
+
             all_documents.append({
                 "doc_id": f"resume_{resume['student_id']}",
                 "student_id": resume['student_id'],
                 "text": resume['resume_text'],
                 "source": "resume",
-                "filename": resume.get('filename', 'unknown')
+                "filename": resume.get('filename', 'unknown'),
+                "metadata": resume.get('metadata', {}),
+                "student_name": resume.get('student_name'),
+                "student_email": resume.get('student_email'),
+                "github_username": None
             })
-        
+
         # get all github documents
-        github_response = supabase.table("github_embeddings")\
-            .select("student_id, document_id, text, repo_name, metadata")\
+
+        github_response = supabase.table("github_embeddings_with_profile")\
+            .select("student_id, document_id, text, repo_name, github_username, metadata, student_name, student_email")\
             .execute()
-        
+
         for github_doc in github_response.data:
+            # skip empty documents
+            if not github_doc.get('text') or not github_doc['text'].strip():
+                continue
+
             all_documents.append({
                 "doc_id": github_doc['document_id'],
                 "student_id": github_doc['student_id'],
                 "text": github_doc['text'],
                 "source": "github",
-                "repo_name": github_doc.get('repo_name', 'unknown')
+                "repo_name": github_doc.get('repo_name', 'unknown'),
+                "github_username": github_doc.get('github_username'),
+                "metadata": github_doc.get('metadata', {}),
+                "student_name": github_doc.get('student_name'),
+                "student_email": github_doc.get('student_email')
             })
-        
+
         print(f"Retrieved {len(all_documents)} total documents for GraphRAG indexing")
-        print(f"  - Resumes: {len(resume_response.data)}")
-        print(f"  - GitHub docs: {len(github_response.data)}")
-        
+        print(f"  - Resumes: {len([d for d in all_documents if d['source'] == 'resume'])}")
+        print(f"  - GitHub docs: {len([d for d in all_documents if d['source'] == 'github'])}")
+
         return all_documents

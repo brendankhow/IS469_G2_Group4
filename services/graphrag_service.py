@@ -1,13 +1,12 @@
 from typing import List, Dict, Optional
-from llama_index.core.indices.property_graph import PropertyGraphIndex
+from llama_index.core.indices.property_graph import PropertyGraphIndex, ImplicitPathExtractor
 from llama_index.core.schema import Document as LlamaDocument
 from llama_index.core import Settings
-from llama_index.core.indices.property_graph import ImplicitPathExtractor
+import json
 import logging
 
 from .vector_store import VectorStore
-from .llama_wrappers import custom_llm, custom_embed_model
-from .llm_client import llm_client
+from .llama_wrappers import custom_llm, custom_embed_model, local_llm_client
 
 logger = logging.getLogger(__name__)
 
@@ -24,13 +23,10 @@ class GraphRAGService:
 
     def build_global_graph_index(self) -> Optional[PropertyGraphIndex]:
         """
-        Builds the GraphRAG index for all students' documents and stores nodes in Supabase.
-        
-        Returns:
-            PropertyGraphIndex or None if no documents found
+        Builds the GraphRAG index for all students' documents and info and stores nodes in Supabase.
         """
         try:
-            Settings.llm = None
+            Settings.llm = custom_llm
             logger.info("Fetching all candidate documents from Supabase...")
             documents_data = VectorStore.get_all_candidates_documents()
 
@@ -48,7 +44,11 @@ class GraphRAGService:
                     metadata={
                         "student_id": doc["student_id"],
                         "source": doc.get("source", "unknown"),
-                        "filename": doc.get("filename") or doc.get("repo_name", "unknown")
+                        "filename": doc.get("filename") or doc.get("repo_name", "unknown"),
+                        "student_name": doc.get("student_name"),
+                        "student_email": doc.get("student_email"),
+                        "github_username": doc.get("github_username"),
+                        **(doc.get("metadata", {}) if isinstance(doc.get("metadata"), dict) else {})
                     },
                 )
                 for doc in documents_data
@@ -69,13 +69,25 @@ class GraphRAGService:
                 kg_extractors=[ImplicitPathExtractor()]
             )
 
-            logger.info("Storing graph nodes in Supabase...")
+            logger.info("Extracting and embedding nodes...")
             all_node_ids = list(index.docstore.docs.keys())
             all_nodes = [index.docstore.get_node(node_id) for node_id in all_node_ids]
 
-            # batch process nodes for efficient embedding generation
-            node_texts = [node.get_content() for node in all_nodes]
-            
+            node_texts = []
+            for node in all_nodes:
+                base_text = node.get_content()
+                metadata = node.metadata
+                if metadata.get("source") == "github":
+                    enriched = base_text
+                    enriched += f"\n\nRepository: {metadata.get('repo_name', 'unknown')}"
+                    enriched += f"\nLanguage: {metadata.get('language', 'unknown')}"
+                    if metadata.get('topics'):
+                        enriched += f"\nTopics: {', '.join(metadata.get('topics', []))}"
+                    enriched += f"\nGitHub User: {metadata.get('github_username', 'unknown')}"
+                    node_texts.append(enriched)
+                else:
+                    node_texts.append(base_text)
+
             # generate embeddings in batches (much faster than one-by-one)
             logger.info(f"Generating embeddings for {len(node_texts)} nodes...")
             all_embeddings = []
@@ -89,14 +101,13 @@ class GraphRAGService:
             node_data_batch = [
                 {
                     "id": node.node_id,
-                    "student_id": node.metadata.get("student_id", "unknown"),
+                    "student_id": node.metadata.get("student_id"),
                     "text": node.get_content(),
                     "embedding": embedding,
-                    "metadata": {
-                        **node.metadata,
-                        "node_type": node.class_name(),  # e.g., "TextNode", "Document"
-                        "source": node.metadata.get("source", "unknown")
-                    }
+                    "metadata": node.metadata,
+                    "student_name": node.metadata.get("student_name"),
+                    "student_email": node.metadata.get("student_email"),
+                    "github_username": node.metadata.get("github_username")
                 }
                 for node, embedding in zip(all_nodes, all_embeddings)
             ]
@@ -112,131 +123,127 @@ class GraphRAGService:
             raise
 
     def query_candidates(
-        self, 
-        query_text: str, 
-        top_k: int = 15, 
+        self,
+        query_text: str,
+        top_k: int = 3,
+        nodes_per_candidate: int = 5,
         filters: Optional[Dict] = None
-    ) -> str:
+    ) -> Dict:
         """
-        Search all candidate GraphRAG nodes and generate recruiter-friendly summary.
-
+        Search GraphRAG nodes and return top_k candidates with balanced representation.
+        
         Args:
-            query_text: Recruiter query (e.g., "Python developers with AWS experience")
-            top_k: Number of top nodes to retrieve
-            filters: Optional metadata filters (e.g., {"source": "resume"})
-
-        Returns:
-            LLM-generated summary of matching candidates
+            query_text: Search query
+            top_k: Number of candidates to return (default: 3)
+            nodes_per_candidate: Maximum nodes per candidate to prevent imbalance
+            filters: Optional filters for search
         """
         try:
             logger.info(f"Processing query: {query_text[:100]}")
 
-            # generate query embedding
             query_embedding = custom_embed_model.get_query_embedding(query_text)
-
-            # search across all candidates
+            
+            # retrieve more nodes initially to ensure candidate diversity
             retrieved_nodes = VectorStore.search_graph_nodes(
                 query_embedding=query_embedding,
-                top_k=top_k,
-                filters=filters
+                top_k=top_k * nodes_per_candidate * 3,  # 3 * 5 * 3 = 45 nodes
+                filters=filters,
+                threshold=0.3
             )
 
             if not retrieved_nodes:
-                logger.warning("No candidates matched the search criteria")
-                return "No candidates matched the search criteria."
+                return {"success": True, "query": query_text, "results": []}
 
-            logger.info(f"Found {len(retrieved_nodes)} matching nodes")
-
-            # aggregate context
-            # group by student for better organisation because there may be >1 node for each student
+            # group nodes by candidate with diversity control
             student_contexts = {}
+            
             for node in retrieved_nodes:
-                student_id = node.get("student_id", "unknown")
+                sid = node.get("student_id")
                 similarity = node.get("similarity", 0.0)
-                
-                if student_id not in student_contexts:
-                    student_contexts[student_id] = {
-                        "chunks": [],
+
+                if sid not in student_contexts:
+                    student_contexts[sid] = {
+                        "nodes": [],
                         "max_similarity": similarity
                     }
                 
-                student_contexts[student_id]["chunks"].append({
-                    "text": node.get("text", ""),
-                    "source": node.get("metadata", {}).get("source", "unknown"),
-                    "similarity": similarity
-                })
-                
-                # track highest similarity score for this student
-                if similarity > student_contexts[student_id]["max_similarity"]:
-                    student_contexts[student_id]["max_similarity"] = similarity
+                # limit nodes per candidate to prevent one candidate from dominating
+                if len(student_contexts[sid]["nodes"]) < nodes_per_candidate:
+                    student_contexts[sid]["nodes"].append(node)
+                    if similarity > student_contexts[sid]["max_similarity"]:
+                        student_contexts[sid]["max_similarity"] = similarity
 
-            # build context for LLM - organise by candidate
-            context_chunks = []
-            for student_id, data in sorted(
-                student_contexts.items(), 
-                key=lambda x: x[1]["max_similarity"], 
+            # sort candidates by their best matching node and take top_k (top 3)
+            sorted_candidates = sorted(
+                student_contexts.items(),
+                key=lambda x: x[1]["max_similarity"],
                 reverse=True
-            ):
-                student_context = f"CANDIDATE ID: {student_id}\n"
-                student_context += f"RELEVANCE SCORE: {data['max_similarity']:.2f}\n"
-                
-                for chunk in data["chunks"]:
-                    student_context += f"\n[{chunk['source'].upper()}] {chunk['text']}"
-                
-                context_chunks.append(student_context + "\n" + "="*80)
+            )[:top_k]
+            
+            student_contexts = dict(sorted_candidates)
 
-            full_context = "\n\n".join(context_chunks)
+            # build candidate context block for prompt
+            candidates_block = ""
+            for sid, info in student_contexts.items():
+                first_node = info["nodes"][0]
+                student_name = first_node.get("student_name")
+                student_email = first_node.get("student_email")
+                github_username = first_node.get("github_username")
 
-            # Generate summary
+                candidates_block += f"CANDIDATE ID: {sid}\n"
+                candidates_block += f"RELEVANCE SCORE: {info['max_similarity']:.2f}\n"
+                candidates_block += f"NAME: {student_name}\n"
+                candidates_block += f"EMAIL: {student_email}\n"
+                if github_username:
+                    candidates_block += f"GITHUB: {github_username}\n"
+                candidates_block += "\n".join([n.get("text") for n in info["nodes"]]) + "\n" + "="*60 + "\n"
+
+            # JSON-enforcing prompt
             system_prompt = (
-                "You are an expert technical recruiter. Analyze the candidate information "
-                "and provide a clear, structured summary that helps make hiring decisions.\n\n"
-                "For each candidate:\n"
-                "1. Summarize their key qualifications and experience\n"
-                "2. Highlight relevant skills matching the query\n"
-                "3. Note any standout projects or achievements\n"
-                "4. Provide an overall fit assessment\n\n"
-                "Rank candidates by relevance and provide actionable recommendations."
+                "You are an expert technical recruiter. Analyze the candidate data and output JSON only.\n\n"
+                "JSON schema:\n"
+                "{\n"
+                "  'success': true,\n"
+                "  'query': '<original query>',\n"
+                "  'results': [\n"
+                "     {\n"
+                "       'candidate_id': '<student_id>',\n"
+                "       'student_name': '<name>',\n"
+                "       'student_email': '<email>',\n"
+                "       'github_username': '<github>',\n"
+                "       'summary': '<brief summary>',\n"
+                "       'key_skills': ['list of skills'],\n"
+                "       'fit_assessment': '<suitability summary>',\n"
+                "       'relevance_score': <float>\n"
+                "     }\n"
+                "  ]\n"
+                "}\n"
+                "IMPORTANT: All fields must be filled. If a candidate is not a good fit, explain why in the fit_assessment. "
+                "For summary, always provide a brief overview of the candidate's background even if limited. "
+                "Return only valid JSON — no extra text."
             )
 
-            user_prompt = (
-                f"SEARCH QUERY: {query_text}\n\n"
-                f"CANDIDATE DATA:\n{full_context}\n\n"
-                f"Provide a recruiter-friendly analysis of these candidates."
-            )
+            user_prompt = f"QUERY: {query_text}\n\nCANDIDATES:\n{candidates_block}"
 
-            logger.info("Generating LLM summary...")
-            response_text = llm_client.generate_text(
+            response_text = local_llm_client.generate_text(
                 system_prompt=system_prompt,
                 user_prompt=user_prompt,
                 temperature=0.1
             )
 
-            logger.info("Query completed successfully")
-            return response_text
+            # Parse JSON safely
+            try:
+                parsed = json.loads(response_text)
+            except json.JSONDecodeError:
+                logger.warning("LLM returned invalid JSON — wrapping manually")
+                parsed = {
+                    "success": True,
+                    "query": query_text,
+                    "raw_output": response_text
+                }
+
+            return parsed
 
         except Exception as e:
             logger.error(f"Query failed: {str(e)}", exc_info=True)
-            raise
-
-    # # can consider uncommenting below + inserting routes if we ever need these functions
-    # # but for simplicity's sake, i'll comment them out first
-
-    # def is_healthy(self) -> bool:
-    #     """Check if GraphRAG service is operational."""
-    #     try:
-    #         test_embedding = custom_embed_model.get_query_embedding("health check")
-    #         return len(test_embedding) > 0
-    #     except Exception as e:
-    #         logger.error(f"Health check failed: {str(e)}")
-    #         return False
-
-    # def clear_index(self) -> bool:
-    #     """Clear all GraphRAG nodes from database."""
-    #     try:
-    #         VectorStore.delete_graph_nodes()
-    #         logger.info("GraphRAG index cleared")
-    #         return True
-    #     except Exception as e:
-    #         logger.error(f"Failed to clear index: {str(e)}")
-    #         return False
+            return {"success": False, "query": query_text, "error": str(e)}

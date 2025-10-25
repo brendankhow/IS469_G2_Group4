@@ -1,10 +1,10 @@
-from typing import List, Any, Optional
+from typing import List, Any
 from llama_index.core.embeddings import BaseEmbedding
 from llama_index.core.llms import CustomLLM, CompletionResponse, LLMMetadata
-from llama_index.core.llms.callbacks import CallbackManager
+
+import ollama
 
 from .embedder import embedder
-from .llm_client import llm_client
 
 
 class CustomRAGEmbedder(BaseEmbedding):
@@ -32,15 +32,43 @@ class CustomRAGEmbedder(BaseEmbedding):
         return self._get_query_embedding(query)
 
 
-class CustomRAGLLM(CustomLLM):
+class LocalLLMClient:
+    """Local LLM client using Ollama."""
+    
+    def __init__(self, model_name: str = "llama3.2"):
+        """
+        Initialize Ollama client.
+        
+        Args:
+            model_name: Model name (e.g., "llama3.2", "mistral", "phi3")
+        """
+        self.model_name = model_name
+    
+    def generate_text(self, system_prompt: str, user_prompt: str, 
+                     temperature: float = 0.0, max_tokens: int = 512) -> str:
+        """Generate text using Ollama."""
+        response = ollama.chat(
+            model=self.model_name,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ],
+            options={
+                "temperature": temperature,
+                "num_predict": max_tokens
+            }
+        )
+        return response['message']['content']
 
-    """Wraps the existing LLM client to be compatible with LlamaIndex."""
+
+class CustomRAGLLM(CustomLLM):
+    """Wraps local Ollama LLM to be compatible with LlamaIndex."""
 
     @property
     def metadata(self) -> LLMMetadata:
         """Return LLM metadata."""
         return LLMMetadata(
-            model_name=llm_client.model_name,
+            model_name=local_llm_client.model_name,
             context_window=4096,
             num_output=512,
             is_chat_model=False,
@@ -48,7 +76,7 @@ class CustomRAGLLM(CustomLLM):
 
     def complete(self, prompt: str, **kwargs: Any) -> CompletionResponse:
         """Generate completion."""
-        response_text = llm_client.generate_text(
+        response_text = local_llm_client.generate_text(
             system_prompt="You are an expert entity and relationship extractor for candidate resumes and cover letters.",
             user_prompt=prompt,
             temperature=0.0  # cannot be changed, must be deterministic for graph extraction
@@ -60,6 +88,9 @@ class CustomRAGLLM(CustomLLM):
         response = self.complete(prompt, **kwargs)
         yield response
 
+
+# remember to run "ollama pull llama3.2" in terminal first
+local_llm_client = LocalLLMClient(model_name="llama3.2")
 
 custom_llm = CustomRAGLLM()
 custom_embed_model = CustomRAGEmbedder()
