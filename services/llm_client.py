@@ -2,6 +2,7 @@
 import os
 from huggingface_hub import InferenceClient
 from dotenv import load_dotenv
+from typing import List, Dict
 
 load_dotenv()
 
@@ -47,5 +48,40 @@ class LLMClient:
         except Exception as e:
             print(f"Error generating text: {e}")
             return f"Error: {str(e)}"
+        
+    def chat_completion(
+        self,
+        messages: List[Dict[str, str]],
+        temperature: float = 0.7,
+    ) -> str:
+        """
+        Generate a chat completion with full conversation history.
+        
+        Args:
+            messages: List of message dicts with 'role' and 'content'
+                     Example: [
+                         {"role": "system", "content": "You are a helpful assistant"},
+                         {"role": "user", "content": "Hello"},
+                         {"role": "assistant", "content": "Hi there!"},
+                         {"role": "user", "content": "How are you?"}
+                     ]
+            temperature: Sampling temperature (0-1)
+            
+        Returns:
+            Generated response text
+        """
+        try:
+            response = self.client.chat_completion(
+                messages=messages,
+                model=self.model_name,
+                temperature=temperature,
+            )
+            
+            return response.choices[0].message.content
+            
+        except Exception as e:
+            print(f"Error in chat completion: {e}")
+            return f"Error: {str(e)}"
+        
 
 llm_client = LLMClient()
