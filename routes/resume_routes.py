@@ -17,71 +17,63 @@ parser = ResumeParser()
 @router.post("/process")
 async def process_resume(student_id: str = Form(...)):
     """
-    Process resume for a student by fetching their resume_url from profiles table
-    Downloads PDF, extracts text, generates embeddings, stores in pgvector
+    Process resume for a student by fetching their resume_url from profiles table.
+    Downloads PDF, extracts text, generates embeddings, stores in pgvector (both full text + chunks).
     """
     temp_path = None
-    
+
     try:
-        # Fetch resume_url from profiles table
+        # Fetch resume_url
         print(f"Fetching resume URL for student: {student_id}")
         profile_response = supabase.table("profiles")\
             .select("resume_url")\
             .eq("id", student_id)\
             .execute()
-        
+
         if not profile_response.data or len(profile_response.data) == 0:
             raise HTTPException(status_code=404, detail="Student profile not found")
-        
+
         resume_url = profile_response.data[0].get("resume_url")
-        
+
         if not resume_url:
             raise HTTPException(status_code=400, detail="No resume uploaded for this student")
-        
+
         print(f"Found resume URL: {resume_url}")
-        
-        # Download PDF from Supabase Storage URL
-        print(f"Downloading resume...")
+
+        # Download PDF
+        print("Downloading resume...")
         response = requests.get(resume_url, timeout=30)
-        
         if response.status_code != 200:
             raise HTTPException(
-                status_code=400, 
+                status_code=400,
                 detail=f"Could not download resume. Status: {response.status_code}"
             )
-        
-        # Save to temp file
+
         with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as temp_file:
             temp_file.write(response.content)
             temp_path = temp_file.name
-        
-        print(f"Downloaded to temp file")
-        
-        # Extract text from PDF
+
         print("Extracting text from PDF...")
         resume_text = parser.extract_text_from_pdf(temp_path)
         resume_text = parser.clean_text(resume_text)
-        
+
         if not resume_text or len(resume_text) < 50:
             raise HTTPException(
-                status_code=400, 
-                detail="Could not extract meaningful text from PDF. Make sure it's a text-based PDF, not a scanned image."
+                status_code=400,
+                detail="Could not extract meaningful text from PDF. Make sure it's a text-based PDF."
             )
-        
+
         print(f"Extracted {len(resume_text)} characters")
-        
-        # Generate embedding
-        print("Generating embedding...")
+
+        # === 1️⃣ Generate full resume embedding ===
+        print("Generating full resume embedding...")
         embedding = embedder.generate_embedding(resume_text)
         print(f"Generated embedding with {len(embedding)} dimensions")
-        
-        # Check if resume already exists for this student
+
+        # Store or update full resume embedding
         existing = VectorStore.get_resume_by_student_id(student_id)
-        
-        # Store or update in vector database
-        print("Storing in database...")
         filename = resume_url.split('/')[-1]
-        
+
         if existing:
             print("Updating existing resume embedding...")
             result = VectorStore.update_resume_embedding(
@@ -91,6 +83,7 @@ async def process_resume(student_id: str = Form(...)):
                 filename=filename,
                 metadata={"resume_url": resume_url}
             )
+            action = "updated"
         else:
             print("Creating new resume embedding...")
             result = VectorStore.store_resume_embedding(
@@ -100,19 +93,36 @@ async def process_resume(student_id: str = Form(...)):
                 filename=filename,
                 metadata={"resume_url": resume_url}
             )
-        
-        print(f"Successfully processed resume for student {student_id}")
-        
+            action = "created"
+
+        # === 2️⃣ Chunk the resume and store embedded chunks ===
+        print("Chunking resume text...")
+        chunks = parser.chunk_text(resume_text)  # You should already have this helper
+        print(f"Generated {len(chunks)} chunks")
+
+        chunk_embeddings = [embedder.generate_embedding(chunk) for chunk in chunks]
+        print(f"Generated embedding with {len(embedding)} dimensions")
+
+        chunk_result = VectorStore.store_resume_chunks(
+            student_id=student_id,
+            chunks=chunks,
+            embeddings=chunk_embeddings,
+            filename=filename,
+            metadata={"resume_url": resume_url}
+        )
+
+        # === 3️⃣ Return response ===
         return {
             "success": True,
-            "message": "Resume processed and vectorized successfully",
+            "message": "Resume processed, vectorized, and chunked successfully.",
             "embedding_id": result["id"],
             "student_id": student_id,
             "text_length": len(resume_text),
             "embedding_dimension": len(embedding),
-            "action": "updated" if existing else "created"
+            "chunks_stored": len(chunk_result),
+            "action": action
         }
-    
+
     except HTTPException:
         raise
     except Exception as e:
@@ -120,11 +130,11 @@ async def process_resume(student_id: str = Form(...)):
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
-    
+
     finally:
-        # Clean up temp file
         if temp_path and os.path.exists(temp_path):
             os.unlink(temp_path)
+
 
 @router.get("/student/{student_id}")
 async def get_student_resume(student_id: str):

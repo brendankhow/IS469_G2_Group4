@@ -1,5 +1,6 @@
 from services.supabase_client import supabase
 from typing import List, Dict, Optional
+import ast
 
 class VectorStore:
     @staticmethod
@@ -21,6 +22,65 @@ class VectorStore:
         
         response = supabase.table("resume_embeddings").insert(data).execute()
         return response.data[0]
+    
+    @staticmethod
+    def store_resume_chunks(
+        student_id: str,
+        chunks: List[str],
+        embeddings: List[List[float]],
+        filename: str,
+        metadata: Optional[Dict] = None
+    ) -> List[Dict]:
+        """
+        Stores resume chunks and their embeddings.
+        """
+        if len(chunks) != len(embeddings):
+            raise ValueError("Number of chunks and embeddings must match.")
+
+        delete_response = supabase.table("resume_embeddings_chunk").delete().eq("student_id", student_id).execute()
+
+        data_batch = [
+            {
+                "student_id": student_id,
+                "chunk_text": chunk,
+                "embedding": emb,
+                "chunk_index": i,
+                "filename": filename,
+                "metadata": metadata or {} 
+            }
+            for i, (chunk, emb) in enumerate(zip(chunks, embeddings))
+            if chunk.strip() # Ensure chunk is not just whitespace
+        ]
+
+        if not data_batch:
+            print("No valid chunks to store.")
+            return []
+
+        response = supabase.table("resume_embeddings_chunk").insert(data_batch).execute()
+        return response.data
+    
+    @staticmethod
+    def search_similar_resume_chunks(
+        query_embedding: List[float],
+        top_k: int = 10,
+        threshold: float = 0.5
+    ) -> List[Dict]:
+        """
+        Search for similar resume CHUNKS globally using the match_resume_chunks function.
+        """
+        row = supabase.table("resume_embeddings_chunk").select("embedding").limit(1).execute()
+        embedding_str = row.data[0]["embedding"]
+        embedding_floats = ast.literal_eval(embedding_str)  # safely convert string to list
+        print(len(embedding_floats))  # should print 384
+        response = supabase.rpc(
+            "match_resume_chunks", # <-- SQL FUNCTION in supabase
+            {
+                "query_embedding": query_embedding,
+                "match_count": top_k,
+                "match_threshold": threshold
+            }
+        ).execute()
+        return response.data
     
     @staticmethod
     def search_similar_resumes(
@@ -89,6 +149,15 @@ class VectorStore:
             
             count = len(response.data) if response.data else 0
             print(f"Deleted {count} resume embedding(s) for student {student_id}")
+
+            # delete chunked embeddings
+            response_chunks = supabase.table("resume_embeddings_chunk")\
+                .delete()\
+                .eq("student_id", student_id)\
+                .execute()
+
+            chunk_count = len(response_chunks.data) if response_chunks.data else 0
+            print(f"Deleted {chunk_count} chunk embedding(s) for student {student_id}")
             return True
         except Exception as e:
             print(f"Error deleting resume embedding for student {student_id}: {str(e)}")
