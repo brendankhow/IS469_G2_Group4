@@ -1,4 +1,5 @@
 import PyPDF2
+from typing import List, Dict, Optional
 
 class ResumeParser:
     @staticmethod
@@ -20,3 +21,19 @@ class ResumeParser:
         # Remove extra whitespace
         text = " ".join(text.split())
         return text
+    
+    @staticmethod
+    def chunk_text(text: str, max_chunk_size: int = 500, overlap: int = 50) -> List[str]:
+        """Splits text into manageable chunks."""
+        paragraphs = [p.strip() for p in text.split('\n\n') if p.strip()]
+        chunks = []
+        for p in paragraphs:
+            if len(p) <= max_chunk_size:
+                chunks.append(p)
+            else:
+                start = 0
+                while start < len(p):
+                    end = min(start + max_chunk_size, len(p))
+                    chunks.append(p[start:end])
+                    start += max_chunk_size - overlap
+        return [c for c in chunks if c.strip()]

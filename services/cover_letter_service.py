@@ -1,4 +1,4 @@
-# services/resume_feedback_service.py
+# services/cover_letter_service.py
 from services.supabase_client import supabase
 from services.llm_client import llm_client
 from typing import List, Dict
