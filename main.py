@@ -11,6 +11,7 @@ from routes.github_routes import router as github_router
 from routes.student_routes import router as student_router
 from routes.graphrag_routes import router as graphrag_router
 from routes.customrag_routes import router as customrag_router
+from routes.personality_routes import router as personality_router
 import uvicorn
 import os 
 
@@ -64,7 +65,10 @@ app.include_router(graphrag_router, prefix="/recruiter", tags=["Recruiter GraphR
 
 # customrag route
 app.include_router(customrag_router, prefix="/recruiter", tags=["Recruiter CustomRag Helper"])
-    
+
+# personality routes
+app.include_router(personality_router, prefix="/personality", tags=["Personality Analysis"])
+
 @app.get("/profiles", tags=["Supabase Helper"])
 def get_profiles():
     response = (
