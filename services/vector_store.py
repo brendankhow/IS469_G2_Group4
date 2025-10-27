@@ -70,8 +70,6 @@ class VectorStore:
         """
         row = supabase.table("resume_embeddings_chunk").select("embedding").limit(1).execute()
         embedding_str = row.data[0]["embedding"]
-        embedding_floats = ast.literal_eval(embedding_str)  # safely convert string to list
-        print(len(embedding_floats))  # should print 384
         response = supabase.rpc(
             "match_resume_chunks", # <-- SQL FUNCTION in supabase
             {
