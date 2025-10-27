@@ -13,3 +13,4 @@ ollama
 torch 
 torchvision
 opencv-python
+cohere
