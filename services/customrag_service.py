@@ -4,10 +4,18 @@ from services.llm_client import llm_client
 from services.vector_store import VectorStore
 from services.embedding_service import *
 from services.llama_wrappers import custom_llm, custom_embed_model, local_llm_client
+from dotenv import load_dotenv
 from typing import List, Dict, Optional
 from services.embedder import embedder
 import json
 import logging
+import cohere
+import os
+
+load_dotenv()
+
+api_key = os.getenv("COHERE_API_KEY")
+co = cohere.Client(api_key)
 
 logger = logging.getLogger(__name__)
 
@@ -39,20 +47,32 @@ class CustomRAGService:
                 query_embedding=query_embedding,
                 top_k=top_k_chunks,
                 threshold=threshold
-                # Note: Pass filters here ONLY if your match_resume_chunks SQL function
-                # was modified to accept and use them.
             )
 
             if not retrieved_chunks:
                 logger.warning("No relevant resume chunks found in VectorStore.")
                 return []
+            
+            # prepare text list for reranking
+            chunk_texts = [c["chunk_text"] for c in retrieved_chunks]
+
+            # call cohere reranker
+            response = co.rerank(
+                model="rerank-english-v3.0",
+                query=query_text,
+                documents=chunk_texts
+            )
+
+            # Add the rerank score back to the original chunks
+            for i, r in enumerate(response.results):
+                retrieved_chunks[i]["rerank_score"] = r.relevance_score
 
             # --- Group Chunks by Candidate & Find Best Score ---
             student_scores = {}
             for chunk in retrieved_chunks:
-                # Keys depend on what your 'match_resume_chunks' SQL function returns
                 sid = chunk.get("student_id")
-                similarity = chunk.get("similarity", 0.0)
+                # similarity = chunk.get("similarity", 0.0) # without re-ranking
+                similarity = chunk.get("rerank_score", chunk.get("similarity", 0.0)) # with cohere re-ranking
                 if not sid: continue
 
                 if sid not in student_scores or similarity > student_scores[sid]['max_similarity']:

@@ -10,3 +10,4 @@ python-multipart
 yt_dlp
 llama-index
 ollama
+cohere
