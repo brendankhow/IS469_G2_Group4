@@ -28,13 +28,13 @@ export function PersonalityChart({ results, showDescriptions = true }: Personali
   const getColor = (level: string) => {
     switch (level) {
       case "high":
-        return "hsl(var(--chart-1))" // Green
+        return "#10b981" // Green
       case "medium":
-        return "hsl(var(--chart-3))" // Yellow
+        return "#f59e0b" // Yellow/Orange
       case "low":
-        return "hsl(var(--chart-5))" // Red
+        return "#ef4444" // Red
       default:
-        return "hsl(var(--primary))"
+        return "#3b82f6" // Blue
     }
   }
 
@@ -48,7 +48,7 @@ export function PersonalityChart({ results, showDescriptions = true }: Personali
         {/* Chart */}
         <div className="h-[300px]">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={chartData} layout="vertical" margin={{ left: 20, right: 20 }}>
+            <BarChart data={chartData} layout="vertical" margin={{ left: 30, right: 20 }}>
               <XAxis type="number" domain={[0, 100]} />
               <YAxis dataKey="name" type="category" width={120} />
               <Tooltip
@@ -57,7 +57,10 @@ export function PersonalityChart({ results, showDescriptions = true }: Personali
                   backgroundColor: "hsl(var(--background))",
                   border: "1px solid hsl(var(--border))",
                   borderRadius: "6px",
+                  color: "white",
                 }}
+                labelStyle={{ color: 'white' }}
+                itemStyle={{ color: 'white' }}
               />
               <Bar dataKey="score" radius={[0, 4, 4, 0]}>
                 {chartData.map((entry, index) => (
@@ -79,10 +82,10 @@ export function PersonalityChart({ results, showDescriptions = true }: Personali
                     style={{
                       backgroundColor:
                         trait.level === "high"
-                          ? "hsl(var(--chart-1))"
+                          ? "#10b981"
                           : trait.level === "medium"
-                            ? "hsl(var(--chart-3))"
-                            : "hsl(var(--chart-5))",
+                            ? "#f59e0b"
+                            : "#ef4444",
                     }}
                   >
                     {trait.score.toFixed(0)}%

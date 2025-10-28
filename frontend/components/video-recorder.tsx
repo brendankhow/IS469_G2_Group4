@@ -69,13 +69,21 @@ export function VideoRecorder({
     if (webcamRef.current && webcamRef.current.stream) {
       try {
         const options = {
-          mimeType: "video/webm;codecs=vp9",
+          mimeType: "video/mp4;codecs=h264",
           videoBitsPerSecond: VIDEO_BITRATE,
         }
 
-        // Fallback if vp9 is not supported
+        // Fallback if h264 is not supported
         let finalOptions = options
         if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+          finalOptions = {
+            mimeType: "video/webm;codecs=vp9",
+            videoBitsPerSecond: VIDEO_BITRATE,
+          }
+        }
+
+        // Second fallback
+        if (!MediaRecorder.isTypeSupported(finalOptions.mimeType)) {
           finalOptions = {
             mimeType: "video/webm",
             videoBitsPerSecond: VIDEO_BITRATE,
@@ -121,7 +129,8 @@ export function VideoRecorder({
   // Process recorded chunks into video blob
   useEffect(() => {
     if (recordedChunks.length > 0 && !recording) {
-      const blob = new Blob(recordedChunks, { type: "video/webm" })
+      const mimeType = mediaRecorderRef.current?.mimeType || "video/webm"
+      const blob = new Blob(recordedChunks, { type: mimeType })
 
       // Validate size
       if (blob.size > maxFileSize) {
@@ -146,7 +155,9 @@ export function VideoRecorder({
 
   const handleUseVideo = () => {
     if (videoBlob) {
-      const fileName = `interview-${Date.now()}.webm`
+      const mimeType = videoBlob.type
+      const extension = mimeType.includes('mp4') ? 'mp4' : mimeType.includes('webm') ? 'webm' : 'webm'
+      const fileName = `interview-${Date.now()}.${extension}`
       onVideoReady(videoBlob, fileName)
     }
   }

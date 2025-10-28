@@ -543,7 +543,7 @@ export default function InterviewAssistantPage() {
             <VideoRecorder
               onVideoReady={handlePracticeVideoComplete}
               maxDuration={60}
-              minDuration={45}
+              minDuration={10}
             />
           )}
           

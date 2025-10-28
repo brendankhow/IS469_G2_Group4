@@ -46,6 +46,22 @@ function CoverLettersContent() {
     fetchJobs(jobIds)
   }, [searchParams])
 
+  useEffect(() => {
+    console.log("🔵 Cover letters page loaded")
+    console.log("🔵 Session storage contents:", sessionStorage.getItem("personality_analysis_id"))
+    console.log("🔵 Local storage contents:", localStorage.getItem("personality_analysis_id"))
+    console.log("🔵 All session storage keys:", Object.keys(sessionStorage))
+    
+    // Debug: Check if personality analysis ID exists in storage
+    const sessionId = sessionStorage.getItem("personality_analysis_id")
+    const localId = localStorage.getItem("personality_analysis_id")
+    if (sessionId || localId) {
+      console.log("✅ Found personality analysis ID - session:", sessionId, "local:", localId)
+    } else {
+      console.log("🟡 No personality analysis ID in storage")
+    }
+  }, [])
+
 
   useEffect(() => {
     console.log('🔵 Cover letters state updated:', coverLetters.length, 'letters')
@@ -264,6 +280,8 @@ function CoverLettersContent() {
 
   const handleSubmitAll = async () => {
     console.log('🔵 Starting application submission')
+    console.log('🔵 Session storage at submission time:', sessionStorage.getItem("personality_analysis_id"))
+    console.log('🔵 All session storage keys at submission:', Object.keys(sessionStorage))
     console.log('🔵 Student profile:', studentProfile)
     console.log('🔵 Cover letters to submit:', coverLetters)
     console.log('🔵 Jobs to submit:', jobs)
@@ -292,10 +310,56 @@ function CoverLettersContent() {
     
     setSubmitting(true)
     try {
-      // Get personality analysis ID from session storage (if video was completed)
-      const personalityAnalysisId = sessionStorage.getItem("personality_analysis_id")
+      // Get latest personality analysis ID from sessionStorage, localStorage, or history API
+      let personalityAnalysisId = sessionStorage.getItem("personality_analysis_id") || localStorage.getItem("personality_analysis_id")
+      
+      console.log("🔵 [handleSubmit] personalityAnalysisId from sessionStorage:", sessionStorage.getItem("personality_analysis_id"))
+      console.log("🔵 [handleSubmit] personalityAnalysisId from localStorage:", localStorage.getItem("personality_analysis_id"))
+      console.log("🔵 [handleSubmit] initial personalityAnalysisId:", personalityAnalysisId)
+      
+      if (!personalityAnalysisId) {
+        console.log("🔵 [handleSubmit] No ID in storage, fetching from history API")
+        try {
+          const personalityResponse = await fetch(`/api/personality/history?student_id=${studentProfile.id}`)
+          if (personalityResponse.ok) {
+            const personalityData = await personalityResponse.json()
+            const latestAnalysis = personalityData.analyses?.[0] // Get the most recent analysis
+            personalityAnalysisId = latestAnalysis?.id
+            console.log("🔵 [handleSubmit] personalityAnalysisId from history:", personalityAnalysisId)
+            
+            // Store it for future use
+            if (personalityAnalysisId) {
+              sessionStorage.setItem("personality_analysis_id", personalityAnalysisId)
+              localStorage.setItem("personality_analysis_id", personalityAnalysisId)
+              console.log("🔵 [handleSubmit] Stored ID in storage for future use")
+            }
+          } else {
+            console.log("🔴 [handleSubmit] Failed to fetch personality history")
+          }
+        } catch (error) {
+          console.warn("Could not fetch personality analysis:", error)
+        }
+      }      // Validate personality analysis ID if found
       if (personalityAnalysisId) {
-        console.log(`🔵 Including personality analysis ID: ${personalityAnalysisId}`)
+        try {
+          console.log("🔵 [handleSubmit] Validating personality analysis ID:", personalityAnalysisId)
+          const validateResponse = await fetch(`/api/personality/validate/${personalityAnalysisId}`)
+          if (!validateResponse.ok) {
+            console.log("🟡 [handleSubmit] Personality analysis ID validation failed, proceeding without it")
+            personalityAnalysisId = null
+          } else {
+            console.log("✅ [handleSubmit] Personality analysis ID validated")
+          }
+        } catch (error) {
+          console.log("🟡 [handleSubmit] Error validating personality analysis ID, proceeding without it:", error)
+          personalityAnalysisId = null
+        }
+      }
+      
+      if (personalityAnalysisId) {
+        console.log(`🔵 [handleSubmit] Including personality analysis ID: ${personalityAnalysisId}`)
+      } else {
+        console.log(`🟡 [handleSubmit] No valid personality analysis ID - submitting without it`)
       }
 
       // Submit applications for all jobs (use jobs array, not coverLetters)
@@ -321,7 +385,10 @@ function CoverLettersContent() {
 
         // Include personality analysis ID if available
         if (personalityAnalysisId) {
+          console.log(`🔵 [handleSubmit] Adding personalityAnalysisId to formData for job ${job.id}:`, personalityAnalysisId)
           formData.append("personalityAnalysisId", personalityAnalysisId)
+        } else {
+          console.log(`🟡 [handleSubmit] No personalityAnalysisId for job ${job.id}`)
         }
 
         console.log(`🔵 Sending POST request to /api/applications`)
@@ -354,9 +421,13 @@ function CoverLettersContent() {
       toast({
         title: "✅ Success",
         description: `${jobs.length} application(s) submitted successfully`,
+        duration: 5000, // Show for 5 seconds
       })
 
-      router.push("/student/applications")
+      // Redirect after showing toast
+      setTimeout(() => {
+        router.push("/student/applications")
+      }, 3000)
     } catch (error) {
       console.error('🔴 Application submission error:', error)
       toast({

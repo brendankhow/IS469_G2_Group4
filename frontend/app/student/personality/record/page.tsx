@@ -58,7 +58,10 @@ export default function PersonalityRecordPage() {
   }
 
   const handleVideoReady = async (blob: Blob, fileName: string) => {
+    console.log("🔵 handleVideoReady called with file:", fileName)
+    
     if (!currentUser) {
+      console.log("🔴 No current user in handleVideoReady")
       toast({
         title: "Error",
         description: "Please log in to continue",
@@ -67,6 +70,7 @@ export default function PersonalityRecordPage() {
       return
     }
 
+    console.log("🔵 Starting analysis for user:", currentUser.id)
     setAnalyzing(true)
     setError(null)
 
@@ -92,16 +96,40 @@ export default function PersonalityRecordPage() {
 
       const data = await response.json()
 
+      console.log("🔵 Analysis API response received:", data)
+      console.log("🔵 analysis_id in response:", data.analysis_id)
+      console.log("🔵 data.success:", data.success)
+
       if (data.success) {
+        console.log("✅ Analysis successful, entering success block")
         setAnalysisResult(data)
 
-        // Fetch the analysis ID from history (most recent one)
-        const historyResponse = await fetch(`/api/personality/history?student_id=${currentUser.id}`)
-        if (historyResponse.ok) {
-          const historyData = await historyResponse.json()
-          if (historyData.analyses && historyData.analyses.length > 0) {
-            setAnalysisId(historyData.analyses[0].id)
+        // Store the analysis ID directly from the response or fetch from history
+        let analysisId = data.analysis_id
+        console.log("Initial analysisId from response:", analysisId)
+        
+        if (!analysisId) {
+          console.warn("No analysis_id in response, fetching from history")
+          const historyResponse = await fetch(`/api/personality/history?student_id=${currentUser.id}`)
+          if (historyResponse.ok) {
+            const historyData = await historyResponse.json()
+            if (historyData.analyses && historyData.analyses.length > 0) {
+              analysisId = historyData.analyses[0].id
+              console.log("analysisId from history:", analysisId)
+            }
           }
+        }
+        
+        if (analysisId) {
+          console.log("Setting analysisId in state and storage:", analysisId)
+          setAnalysisId(analysisId)
+          sessionStorage.setItem("personality_analysis_id", analysisId)
+          localStorage.setItem("personality_analysis_id", analysisId) // Backup to localStorage
+          console.log("Stored personality analysis ID:", analysisId)
+          console.log("Session storage contents:", sessionStorage.getItem("personality_analysis_id"))
+          console.log("Local storage contents:", localStorage.getItem("personality_analysis_id"))
+        } else {
+          console.warn("Could not get analysis ID")
         }
 
         toast({
@@ -109,10 +137,12 @@ export default function PersonalityRecordPage() {
           description: "Your video has been analyzed successfully",
         })
       } else {
+        console.log("❌ Analysis failed - data.success is false")
         throw new Error(data.error || "Analysis failed")
       }
     } catch (err: any) {
-      console.error("Analysis error:", err)
+      console.error("❌ Analysis error:", err)
+      console.error("❌ Error stack:", err.stack)
       setError(err.message || "Failed to analyze video. Please try again.")
       toast({
         title: "Analysis Failed",
@@ -120,6 +150,7 @@ export default function PersonalityRecordPage() {
         variant: "destructive",
       })
     } finally {
+      console.log("🔵 Analysis process finished")
       setAnalyzing(false)
     }
   }
@@ -127,17 +158,146 @@ export default function PersonalityRecordPage() {
   const handleReRecord = () => {
     setAnalysisResult(null)
     setAnalysisId(null)
+    sessionStorage.removeItem("personality_analysis_id")
     setError(null)
   }
 
-  const handleContinue = () => {
-    // Store analysis ID in session storage for application submission
-    if (analysisId) {
-      sessionStorage.setItem("personality_analysis_id", analysisId)
+  const handleContinue = async () => {
+    try {
+      // Get job IDs from returnTo URL
+      const url = new URL(returnTo, window.location.origin)
+      const jobIds = url.searchParams.get('jobs')?.split(',') || []
+      
+      if (jobIds.length === 0) {
+        toast({
+          title: "Error",
+          description: "No jobs found to submit applications for",
+          variant: "destructive",
+        })
+        return
+      }
+
+      // Get cover letters from session storage
+      const coverLettersData = sessionStorage.getItem('pending_cover_letters')
+      if (!coverLettersData) {
+        toast({
+          title: "Error",
+          description: "No cover letters found. Please go back and generate them.",
+          variant: "destructive",
+        })
+        return
+      }
+
+      const coverLetters = JSON.parse(coverLettersData)
+      
+      // Get student profile for resume URL
+      const profileResponse = await fetch("/api/auth/me")
+      if (!profileResponse.ok) {
+        throw new Error("Failed to fetch profile")
+      }
+      const profileData = await profileResponse.json()
+      const studentProfile = profileData.user
+
+      if (!studentProfile?.resume_url) {
+        toast({
+          title: "Error",
+          description: "Please complete your profile with a resume before submitting",
+          variant: "destructive",
+        })
+        router.push("/student/profile")
+        return
+      }
+
+      // Get latest personality analysis ID from session storage
+      const personalityAnalysisId = sessionStorage.getItem("personality_analysis_id")
+
+      console.log("🔵 [handleContinue] personalityAnalysisId from sessionStorage:", personalityAnalysisId)
+
+      if (!personalityAnalysisId) {
+        toast({
+          title: "Error",
+          description: "No personality analysis found. Please complete personality analysis first.",
+          variant: "destructive",
+        })
+        return
+      }
+
+      // Validate that the personality analysis ID exists in the database
+      try {
+        console.log("🔵 [handleContinue] Validating personality analysis ID:", personalityAnalysisId)
+        const validateResponse = await fetch(`/api/personality/validate/${personalityAnalysisId}`)
+        if (!validateResponse.ok) {
+          console.log("🔴 [handleContinue] Personality analysis ID validation failed")
+          toast({
+            title: "Error",
+            description: "Personality analysis data not found. Please complete video analysis again.",
+            variant: "destructive",
+          })
+          sessionStorage.removeItem("personality_analysis_id")
+          return
+        }
+        console.log("✅ [handleContinue] Personality analysis ID validated")
+      } catch (error) {
+        console.log("🔴 [handleContinue] Error validating personality analysis ID:", error)
+        toast({
+          title: "Error",
+          description: "Failed to validate personality analysis. Please try again.",
+          variant: "destructive",
+        })
+        return
+      }
+
+      // Submit applications for all jobs
+      const submissionPromises = jobIds.map(async (jobId) => {
+        const coverLetter = coverLetters.find((cl: any) => cl.jobId === jobId)
+        const coverLetterContent = coverLetter?.content || ""
+        
+        console.log(`🔵 [handleContinue] Submitting job ${jobId} with personalityAnalysisId:`, personalityAnalysisId)
+        
+        const formData = new FormData()
+        formData.append("jobId", jobId)
+        formData.append("coverLetter", coverLetterContent)
+        formData.append("resumeUrl", studentProfile.resume_url)
+        formData.append("personalityAnalysisId", personalityAnalysisId)
+
+        const response = await fetch("/api/applications", {
+          method: "POST",
+          body: formData,
+        })
+
+        if (!response.ok) {
+          const errorData = await response.json()
+          throw new Error(errorData.error || "Failed to submit application")
+        }
+
+        return response.json()
+      })
+
+      await Promise.all(submissionPromises)
+
+      // Clear session storage
+      sessionStorage.removeItem("personality_analysis_id")
+      sessionStorage.removeItem("pending_cover_letters")
+
+      toast({
+        title: "✅ Applications Submitted",
+        description: `${jobIds.length} application(s) submitted successfully`,
+        duration: 5000, // Show for 5 seconds
+      })
+
+      // Redirect after showing toast
+      setTimeout(() => {
+        router.push("/student/applications")
+      }, 3000)
+
+    } catch (error) {
+      console.error('Continue submission error:', error)
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to submit applications",
+        variant: "destructive",
+      })
     }
-    // Clear pending cover letters since we're continuing with video
-    sessionStorage.removeItem("pending_cover_letters")
-    router.push(returnTo)
   }
 
   const handleSkip = async () => {
@@ -218,9 +378,13 @@ export default function PersonalityRecordPage() {
       toast({
         title: "✅ Success",
         description: `${jobIds.length} application(s) submitted successfully`,
+        duration: 5000, // Show for 5 seconds
       })
 
-      router.push("/student/applications")
+      // Redirect after showing toast
+      setTimeout(() => {
+        router.push("/student/applications")
+      }, 3000)
     } catch (error) {
       console.error('Skip submission error:', error)
       toast({
@@ -300,7 +464,7 @@ export default function PersonalityRecordPage() {
             <VideoRecorder
               onVideoReady={handleVideoReady}
               maxDuration={60}
-              minDuration={45}
+              minDuration={10}
               maxFileSize={100 * 1024 * 1024}
               allowUpload={true}
             />

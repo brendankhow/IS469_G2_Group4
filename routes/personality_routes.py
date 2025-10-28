@@ -25,7 +25,8 @@ class PersonalityAnalysisResponse(BaseModel):
     success: bool
     results: Optional[List[Dict]] = None
     error: Optional[str] = None
-    storage_path: Optional[str] = None  # Add storage path to response
+    storage_path: Optional[str] = None
+    analysis_id: Optional[str] = None  # Add analysis ID to response  # Add storage path to response
 
 
 
@@ -66,13 +67,16 @@ async def analyze_personality_from_upload(
     temp_path = None
     storage_path = None
    
+    print(f"[Personality API] Received: student_id={student_id}, upload_to_storage={upload_to_storage} (type: {type(upload_to_storage)})")
+   
     try:
         # Validate file type
-        allowed_types = ['video/mp4', 'video/avi', 'video/quicktime', 'video/x-matroska']
-        if video.content_type not in allowed_types:
+        allowed_types = ['video/mp4', 'video/webm', 'video/avi', 'video/quicktime', 'video/x-matroska']
+        base_content_type = video.content_type.split(';')[0]
+        if base_content_type not in allowed_types:
             raise HTTPException(
                 status_code=400,
-                detail=f"Invalid file type. Allowed: mp4, avi, mov, mkv. Got: {video.content_type}"
+                detail=f"Invalid file type. Allowed: mp4, webm, avi, mov, mkv. Got: {video.content_type}"
             )
        
         # Validate file size (100MB max)
@@ -125,8 +129,11 @@ async def analyze_personality_from_upload(
         if storage_path:
             result["storage_path"] = storage_path
        
-        # Store results in database if student_id provided
-        if student_id and result.get("success"):
+        print(f"[Personality API] student_id={student_id}, upload_to_storage={upload_to_storage}, result.success={result.get('success')}")
+       
+        # Store results in database if student_id provided AND upload_to_storage is true
+        analysis_id = None
+        if student_id and upload_to_storage and result.get("success"):
             try:
                 # Get video URL if uploaded
                 video_url = None
@@ -147,12 +154,20 @@ async def analyze_personality_from_upload(
                     "interview_score": result["results"][5]["raw_score"]
                 }
                
-                supabase.table("personality_analyses").insert(analysis_data).execute()
-                print(f"[Personality API] Stored results for student: {student_id}")
+                insert_response = supabase.table("personality_analyses").insert(analysis_data).execute()
+                if insert_response.data and len(insert_response.data) > 0:
+                    analysis_id = insert_response.data[0]["id"]
+                    print(f"[Personality API] Stored results for student: {student_id}, analysis_id: {analysis_id}")
+                else:
+                    print(f"[Personality API] Insert returned no data for student: {student_id}")
                
             except Exception as db_error:
                 print(f"[Personality API] Warning: Could not store results: {db_error}")
                 # Don't fail the request if DB storage fails
+
+        # Add analysis_id to result
+        result["analysis_id"] = analysis_id
+        print(f"[Personality API] Returning response with analysis_id: {analysis_id}")
        
         return PersonalityAnalysisResponse(**result)
    

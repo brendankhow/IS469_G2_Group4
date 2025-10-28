@@ -22,7 +22,8 @@ export async function POST(request: NextRequest) {
 
     // Validate file type
     const validTypes = ["video/mp4", "video/webm", "video/quicktime", "video/x-matroska", "video/avi"]
-    if (!validTypes.includes(video.type)) {
+    const baseType = video.type.split(';')[0]
+    if (!validTypes.includes(baseType)) {
       return NextResponse.json(
         { error: `Invalid file type: ${video.type}. Allowed: MP4, WebM, MOV, MKV, AVI` },
         { status: 400 }
@@ -56,6 +57,8 @@ export async function POST(request: NextRequest) {
 
     const data = await response.json()
     console.log("[Personality API] Analysis successful")
+    console.log("[Personality API] Response data:", JSON.stringify(data, null, 2))
+    console.log("[Personality API] analysis_id in response:", data.analysis_id)
     return NextResponse.json(data)
   } catch (error) {
     console.error("[Personality API] Error:", error)

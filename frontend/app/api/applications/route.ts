@@ -56,6 +56,28 @@ export async function POST(request: NextRequest) {
     console.log('  - resumeFile:', resumeFile?.name || 'null')
     console.log('  - resumeUrl:', resumeUrl)
     console.log('  - personalityAnalysisId:', personalityAnalysisId)
+    console.log('  - personalityAnalysisId type:', typeof personalityAnalysisId)
+    console.log('  - personalityAnalysisId is null?', personalityAnalysisId === null)
+    console.log('  - personalityAnalysisId is empty string?', personalityAnalysisId === '')
+
+    // Validate personality analysis ID if provided
+    if (personalityAnalysisId) {
+      console.log('🔵 Validating personality analysis ID:', personalityAnalysisId)
+      const supabase = await createClient()
+      const { data: analysisData, error: analysisError } = await supabase
+        .from('personality_analyses')
+        .select('id')
+        .eq('id', personalityAnalysisId)
+        .single()
+      
+      if (analysisError || !analysisData) {
+        console.log('🔴 Invalid personality analysis ID:', personalityAnalysisId)
+        return NextResponse.json({ 
+          error: 'Invalid personality analysis ID. Please complete video analysis first.' 
+        }, { status: 400 })
+      }
+      console.log('✅ Personality analysis ID validated:', personalityAnalysisId)
+    }
 
     if (!jobId) {
       console.log('🔴 Job ID is missing')
