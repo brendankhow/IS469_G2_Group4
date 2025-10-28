@@ -69,7 +69,10 @@ def chat(request: ChatRequest):
             )
 
         if not matches:
-            return ChatResponse(response="No matching candidates found.")  
+             return ChatResponse(
+                response=None,  
+                raw_response="No matching candidates found."
+            )
 
         enriched_candidates = []
         seen_students = set()  # Track students we've already processed
