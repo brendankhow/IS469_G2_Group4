@@ -23,7 +23,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Call the Python backend
-    const response = await fetch("http://localhost:8000/github/analyze", {
+    const response = await fetch("http://127.0.0.1:8000/github/analyze", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

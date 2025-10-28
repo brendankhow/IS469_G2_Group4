@@ -48,12 +48,14 @@ export async function POST(request: NextRequest) {
     const coverLetter = formData.get('coverLetter') as string
     const resumeFile = formData.get('resume') as File | null
     const resumeUrl = formData.get('resumeUrl') as string | null // Resume URL from profile
+    const personalityAnalysisId = formData.get('personalityAnalysisId') as string | null // Video interview
 
     console.log('🔵 Form data received:')
     console.log('  - jobId:', jobId)
     console.log('  - coverLetter length:', coverLetter?.length || 0)
     console.log('  - resumeFile:', resumeFile?.name || 'null')
     console.log('  - resumeUrl:', resumeUrl)
+    console.log('  - personalityAnalysisId:', personalityAnalysisId)
 
     if (!jobId) {
       console.log('🔴 Job ID is missing')
@@ -103,6 +105,7 @@ export async function POST(request: NextRequest) {
       cover_letter: coverLetter || null,
       resume_url: finalResumeUrl || null,
       resume_filename: resumeFilename || null,
+      personality_analysis_id: personalityAnalysisId || null,
       status: 'pending' as const,
     }
     

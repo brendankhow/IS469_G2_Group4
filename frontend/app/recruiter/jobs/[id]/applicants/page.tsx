@@ -8,9 +8,10 @@ import { Badge } from "@/components/ui/badge"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet"
 import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { Loader2, Mail, Phone, FileText, Sparkles, AlertCircle, Calendar, Download, Eye, Send, Bot, User } from "lucide-react"
+import { Loader2, Mail, Phone, FileText, Sparkles, AlertCircle, Calendar, Download, Eye, Send, Bot, User, Video } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { PDFViewerWithChatModal } from "@/components/pdf-viewer-with-chat-modal"
+import { PersonalityScoreModal } from "@/components/personality-score-modal"
 import ReactMarkdown from "react-markdown"
 
 interface Applicant {
@@ -23,6 +24,7 @@ interface Applicant {
   cover_letter?: string
   resume_url?: string
   resume_filename?: string
+  personality_analysis_id?: string | null
   status: "pending" | "accepted" | "rejected"
   created_at: string
 }
@@ -113,6 +115,11 @@ export default function ApplicantsPage() {
   const [pdfViewerOpen, setPdfViewerOpen] = useState(false)
   const [selectedResumeUrl, setSelectedResumeUrl] = useState<string | null>(null)
   const [selectedCandidateForResume, setSelectedCandidateForResume] = useState<Applicant | null>(null)
+  
+  // Personality Modal state
+  const [personalityModalOpen, setPersonalityModalOpen] = useState(false)
+  const [selectedPersonalityId, setSelectedPersonalityId] = useState<string | null>(null)
+  const [selectedApplicantName, setSelectedApplicantName] = useState<string>("")
   
   // AI Matching state
   const [loadingAIMatching, setLoadingAIMatching] = useState(false)
@@ -578,6 +585,21 @@ export default function ApplicantsPage() {
                     </Button>
                   )}
                   
+                  {applicant.personality_analysis_id && (
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={() => {
+                        setSelectedPersonalityId(applicant.personality_analysis_id!)
+                        setSelectedApplicantName(applicant.student_name || "Candidate")
+                        setPersonalityModalOpen(true)
+                      }}
+                    >
+                      <Video className="mr-2 h-4 w-4" />
+                      View Video Interview
+                    </Button>
+                  )}
+                  
                   <Button
                     variant="outline"
                     size="sm"
@@ -835,6 +857,20 @@ export default function ApplicantsPage() {
           sendingMessage={sendingMessage}
         />
       )}
+
+      {/* Personality Score Modal */}
+      <PersonalityScoreModal
+        open={personalityModalOpen}
+        onOpenChange={(isOpen) => {
+          setPersonalityModalOpen(isOpen)
+          if (!isOpen) {
+            setSelectedPersonalityId(null)
+            setSelectedApplicantName("")
+          }
+        }}
+        personalityAnalysisId={selectedPersonalityId}
+        candidateName={selectedApplicantName}
+      />
     </div>
   )
 }

@@ -35,10 +35,10 @@ class LLMClient:
                 {"role": "user", "content": user_prompt}
             ]
             
-            # Call the Hugging Face API using chat_completion method
-            response = self.client.chat_completion(
-                messages=messages,
+            # Call the Hugging Face API using chat completions method
+            response = self.client.chat.completions.create(
                 model=self.model_name,
+                messages=messages,
                 temperature=temperature,
                 max_tokens=2000
             )
@@ -72,9 +72,9 @@ class LLMClient:
             Generated response text
         """
         try:
-            response = self.client.chat_completion(
-                messages=messages,
+            response = self.client.chat.completions.create(
                 model=self.model_name,
+                messages=messages,
                 temperature=temperature,
             )
             

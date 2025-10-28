@@ -5,8 +5,9 @@ import { useSearchParams, useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Textarea } from "@/components/ui/textarea"
-import { Loader2, Sparkles, Send } from "lucide-react"
+import { Loader2, Sparkles, Send, Video, ArrowRight } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 
 interface Job {
   id: string
@@ -291,6 +292,12 @@ function CoverLettersContent() {
     
     setSubmitting(true)
     try {
+      // Get personality analysis ID from session storage (if video was completed)
+      const personalityAnalysisId = sessionStorage.getItem("personality_analysis_id")
+      if (personalityAnalysisId) {
+        console.log(`🔵 Including personality analysis ID: ${personalityAnalysisId}`)
+      }
+
       // Submit applications for all jobs (use jobs array, not coverLetters)
       const submissionPromises = jobs.map(async (job, index) => {
         console.log(`🔵 Submitting application ${index + 1}/${jobs.length}`)
@@ -310,6 +317,11 @@ function CoverLettersContent() {
         if (studentProfile?.resume_url) {
           console.log(`🔵 Including resume URL: ${studentProfile.resume_url}`)
           formData.append("resumeUrl", studentProfile.resume_url)
+        }
+
+        // Include personality analysis ID if available
+        if (personalityAnalysisId) {
+          formData.append("personalityAnalysisId", personalityAnalysisId)
         }
 
         console.log(`🔵 Sending POST request to /api/applications`)
@@ -335,6 +347,10 @@ function CoverLettersContent() {
       await Promise.all(submissionPromises)
 
       console.log('✅ All applications submitted successfully')
+      
+      // Clear personality analysis ID from session after submission
+      sessionStorage.removeItem("personality_analysis_id")
+      
       toast({
         title: "✅ Success",
         description: `${jobs.length} application(s) submitted successfully`,
@@ -431,24 +447,78 @@ function CoverLettersContent() {
         })}
       </div>
 
-      <div className="mt-8 flex justify-end">
-        <Button 
-          onClick={handleSubmitAll} 
-          disabled={submitting || jobs.length === 0 || !studentProfile?.resume_url} 
-          size="lg"
-        >
-          {submitting ? (
-            <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Submitting...
-            </>
-          ) : (
-            <>
-              <Send className="mr-2 h-4 w-4" />
-              Submit All Applications
-            </>
-          )}
-        </Button>
+      {/* Success Alert - Show after generation */}
+      {!loading && coverLetters.every(cl => !cl.isGenerating && cl.content.length > 0) && (
+        <Alert className="mb-6 border-green-500/50 bg-green-500/10">
+          <Sparkles className="h-4 w-4 text-green-500" />
+          <AlertDescription className="text-green-500">
+            ✨ Cover letters generated successfully! You can edit them or proceed to the next step.
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {/* Action Buttons */}
+      <div className="mt-8 space-y-4">
+        {/* Video Interview Option */}
+        <Alert>
+          <Video className="h-4 w-4" />
+          <AlertDescription>
+            <p className="font-semibold mb-1">🎥 Complete a Video Interview (Recommended)</p>
+            <p className="text-sm text-muted-foreground">
+              Stand out by adding a 45-60 second introduction video to your applications
+            </p>
+          </AlertDescription>
+        </Alert>
+
+        {/* Video Interview Button */}
+        <div className="flex justify-end">
+          <Button
+            onClick={() => {
+              // Save current jobs and cover letters to session for return
+              const jobIds = jobs.map(j => j.id).join(',')
+              const coverLettersData = coverLetters.map(cl => ({
+                jobId: cl.jobId,
+                content: cl.content
+              }))
+              sessionStorage.setItem('pending_cover_letters', JSON.stringify(coverLettersData))
+              router.push(`/student/personality/record?returnTo=/student/cover-letters?jobs=${jobIds}`)
+            }}
+            variant="default"
+            disabled={submitting || jobs.length === 0}
+            size="lg"
+          >
+            <Video className="mr-2 h-4 w-4" />
+            Next: Video Interview
+            <ArrowRight className="ml-2 h-4 w-4" />
+          </Button>
+        </div>
+
+        {/* Submit Buttons */}
+        <div className="flex gap-4 justify-end">
+          <Button
+            onClick={handleSubmitAll}
+            variant="outline"
+            disabled={submitting || jobs.length === 0 || !studentProfile?.resume_url}
+            size="lg"
+          >
+            {submitting ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Submitting...
+              </>
+            ) : (
+              <>
+                Skip & Submit Applications
+              </>
+            )}
+          </Button>
+        </div>
+
+        {!studentProfile?.resume_url && (
+          <p className="text-sm text-center text-destructive">
+            Please upload your resume in your profile before submitting applications
+          </p>
+        )}
       </div>
     </div>
   )

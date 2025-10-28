@@ -431,6 +431,52 @@ def chat_with_history(request: ChatHistoryRequest) -> ChatResponse:
                     
                     context = "\n\n".join(context_parts) if context_parts else "No specific context found for this query."
                     
+                    # Fetch personality analysis if available
+                    personality_context = ""
+                    try:
+                        personality_response = supabase.table("personality_analyses")\
+                            .select("*")\
+                            .eq("student_id", request.student_id)\
+                            .order("created_at", desc=True)\
+                            .limit(1)\
+                            .execute()
+                        
+                        if personality_response.data and len(personality_response.data) > 0:
+                            personality_data = personality_response.data[0]
+                            
+                            def get_personality_level(score):
+                                if score < 0.4:
+                                    return "Low"
+                                elif score < 0.6:
+                                    return "Medium"
+                                else:
+                                    return "High"
+                            
+                            # Build personality context
+                            extraversion_level = get_personality_level(personality_data['extraversion'])
+                            agreeableness_level = get_personality_level(personality_data['agreeableness'])
+                            conscientiousness_level = get_personality_level(personality_data['conscientiousness'])
+                            emotional_stability = 1 - personality_data['neuroticism']
+                            emotional_stability_level = get_personality_level(emotional_stability)
+                            openness_level = get_personality_level(personality_data['openness'])
+                            interview_score = personality_data['interview_score']
+                            
+                            personality_context = f"""
+
+**Video Interview & Personality Analysis:**
+• Extraversion: {personality_data['extraversion']:.2f} ({extraversion_level}) - {"Outgoing and energetic, thrives in teams" if extraversion_level == "High" else "Balanced social interaction" if extraversion_level == "Medium" else "Reserved and thoughtful"}
+• Agreeableness: {personality_data['agreeableness']:.2f} ({agreeableness_level}) - {"Highly collaborative and empathetic" if agreeableness_level == "High" else "Cooperative when needed" if agreeableness_level == "Medium" else "Direct and analytical"}
+• Conscientiousness: {personality_data['conscientiousness']:.2f} ({conscientiousness_level}) - {"Highly organized and detail-oriented" if conscientiousness_level == "High" else "Balanced structure and flexibility" if conscientiousness_level == "Medium" else "Flexible and adaptable"}
+• Emotional Stability: {emotional_stability:.2f} ({emotional_stability_level}) - {"Calm under pressure, resilient" if emotional_stability_level == "High" else "Generally stable" if emotional_stability_level == "Medium" else "Sensitive and perceptive"}
+• Openness: {personality_data['openness']:.2f} ({openness_level}) - {"Creative and innovative thinker" if openness_level == "High" else "Open to new ideas in frameworks" if openness_level == "Medium" else "Practical and results-focused"}
+• Overall Interview Score: {interview_score:.2f}/1.00 ({interview_score * 100:.0f}%)
+
+**Interview Presence:** {"Excellent presentation skills and professional demeanor" if interview_score > 0.7 else "Solid interview performance with clear communication" if interview_score > 0.5 else "May benefit from interview coaching"}
+"""
+                            print(f"[chat_with_history] Added personality context for student: {request.student_id}")
+                    except Exception as e:
+                        print(f"[chat_with_history] Could not fetch personality data: {str(e)}")
+                    
                     # Build enriched system prompt
                     github_info = f"GitHub: @{github_username}" if github_username != "N/A" else "No GitHub profile"
                     
@@ -442,16 +488,23 @@ def chat_with_history(request: ChatHistoryRequest) -> ChatResponse:
 - {github_info}
 
 **Relevant Information:**
-{context}
+{context}{personality_context}
 
 **Instructions:**
-- Answer questions about this candidate based on their resume and GitHub portfolio
-- Be specific and reference actual projects, skills, and experiences from the provided context
+- Answer questions about this candidate based on their resume, GitHub portfolio, and personality analysis
+- Be specific and reference actual projects, skills, experiences, and personality traits from the provided context
 - Use **bold** for emphasis on key points and skills
 - Use bullet points (•) for listing items clearly
 - Maintain proper line spacing for readability
 - If information is not in the context, politely say you don't have that specific information
 - Be professional and highlight the candidate's strengths
+- When discussing personality, relate traits to job performance and team fit
+
+**Example Questions You Can Ask:**
+- "How would {student_name}'s personality fit our team culture?"
+- "What are {student_name}'s communication strengths based on the video interview?"
+- "Is {student_name} suited for a collaborative/independent role based on personality?"
+- "Tell me about {student_name}'s technical skills and interview presence"
 
 **Conversation History Context:**
 {chr(10).join([f"{'Candidate Info' if msg['role'] == 'assistant' else 'Recruiter'}: {msg['content'][:200]}..." for msg in request.messages[-4:]]) if len(request.messages) > 0 else 'This is the start of the conversation.'}

@@ -90,6 +90,7 @@ export type Database = {
           cover_letter: string | null
           resume_url: string | null
           resume_filename: string | null
+          personality_analysis_id: string | null
           status: 'pending' | 'accepted' | 'rejected'
           created_at: string
           updated_at: string
@@ -101,6 +102,7 @@ export type Database = {
           cover_letter?: string | null
           resume_url?: string | null
           resume_filename?: string | null
+          personality_analysis_id?: string | null
           status?: 'pending' | 'accepted' | 'rejected'
           created_at?: string
           updated_at?: string
@@ -112,6 +114,7 @@ export type Database = {
           cover_letter?: string | null
           resume_url?: string | null
           resume_filename?: string | null
+          personality_analysis_id?: string | null
           status?: 'pending' | 'accepted' | 'rejected'
           created_at?: string
           updated_at?: string

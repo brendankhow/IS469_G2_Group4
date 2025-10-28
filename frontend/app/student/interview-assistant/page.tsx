@@ -5,9 +5,12 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { Loader2, Send, Bot, Sparkles, User, MessageSquare } from "lucide-react"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Loader2, Send, Bot, Sparkles, User, MessageSquare, Video } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import ReactMarkdown from "react-markdown"
+import { VideoRecorder } from "@/components/video-recorder"
+import { PersonalityResults } from "@/components/personality-results"
 
 interface ChatMessage {
   role: "user" | "assistant"
@@ -80,6 +83,11 @@ export default function InterviewAssistantPage() {
   const [loading, setLoading] = useState(false)
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [profileLoading, setProfileLoading] = useState(true)
+  
+  // Practice video interview state
+  const [practiceModalOpen, setPracticeModalOpen] = useState(false)
+  const [practiceStep, setPracticeStep] = useState<"record" | "analyzing" | "results">("record")
+  const [practiceAnalysis, setPracticeAnalysis] = useState<any>(null)
 
   useEffect(() => {
     fetchProfile()
@@ -204,6 +212,53 @@ export default function InterviewAssistantPage() {
       title: "History Cleared",
       description: "Chat history has been cleared",
     })
+  }
+  
+  const handlePracticeVideoComplete = async (blob: Blob, fileName: string) => {
+    setPracticeStep("analyzing")
+    
+    try {
+      // Convert blob to File
+      const videoFile = new File([blob], fileName, { type: blob.type })
+      
+      const formData = new FormData()
+      formData.append("video", videoFile)
+      formData.append("student_id", profile?.id.toString() || "")
+      formData.append("upload_to_storage", "false") // Don't save to database
+      
+      const response = await fetch("/api/personality/analyze", {
+        method: "POST",
+        body: formData,
+      })
+      
+      if (!response.ok) {
+        throw new Error("Analysis failed")
+      }
+      
+      const data = await response.json()
+      setPracticeAnalysis(data)
+      setPracticeStep("results")
+      
+      toast({
+        title: "Analysis Complete",
+        description: "Your practice interview has been analyzed",
+      })
+    } catch (error) {
+      console.error("Practice analysis error:", error)
+      toast({
+        title: "Analysis Failed",
+        description: "Failed to analyze your practice video",
+        variant: "destructive",
+      })
+      setPracticeModalOpen(false)
+      setPracticeStep("record")
+    }
+  }
+  
+  const handleClosePracticeModal = () => {
+    setPracticeModalOpen(false)
+    setPracticeStep("record")
+    setPracticeAnalysis(null)
   }
 
   if (profileLoading) {
@@ -397,6 +452,31 @@ export default function InterviewAssistantPage() {
 
       {/* Tips Sidebar */}
       <div className="w-80 space-y-4 flex-shrink-0">
+        {hasRequiredProfile && (
+          <Card className="border-2 border-primary/50 bg-primary/5">
+            <CardHeader>
+              <CardTitle className="text-sm flex items-center gap-2">
+                <Video className="h-4 w-4" />
+                Practice Video Interview
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <p className="text-xs text-muted-foreground">
+                Record a 45-60 second practice video to get instant personality analysis feedback. 
+                Practice as many times as you want - nothing is saved!
+              </p>
+              <Button 
+                onClick={() => setPracticeModalOpen(true)}
+                className="w-full"
+                variant="default"
+              >
+                <Video className="mr-2 h-4 w-4" />
+                Start Practice
+              </Button>
+            </CardContent>
+          </Card>
+        )}
+        
         <Card className="border-2">
           <CardHeader>
             <CardTitle className="text-sm">Interview Tips</CardTitle>
@@ -446,6 +526,59 @@ export default function InterviewAssistantPage() {
           </CardContent>
         </Card>
       </div>
+      
+      {/* Practice Video Interview Modal */}
+      <Dialog open={practiceModalOpen} onOpenChange={handleClosePracticeModal}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Practice Video Interview</DialogTitle>
+            <DialogDescription>
+              {practiceStep === "record" && "Record a 45-60 second practice video. This won't be saved - it's just for practice!"}
+              {practiceStep === "analyzing" && "Analyzing your video interview..."}
+              {practiceStep === "results" && "Here are your practice results. Try again to improve!"}
+            </DialogDescription>
+          </DialogHeader>
+          
+          {practiceStep === "record" && (
+            <VideoRecorder
+              onVideoReady={handlePracticeVideoComplete}
+              maxDuration={60}
+              minDuration={45}
+            />
+          )}
+          
+          {practiceStep === "analyzing" && (
+            <div className="flex flex-col items-center justify-center py-12 space-y-4">
+              <Loader2 className="h-12 w-12 animate-spin text-primary" />
+              <p className="text-muted-foreground">Analyzing your personality traits...</p>
+            </div>
+          )}
+          
+          {practiceStep === "results" && practiceAnalysis && (
+            <div className="space-y-6">
+              <PersonalityResults 
+                results={practiceAnalysis.results || []} 
+                overallScore={practiceAnalysis.interview_score}
+              />
+              
+              <div className="flex gap-3 justify-end pt-4 border-t">
+                <Button variant="outline" onClick={handleClosePracticeModal}>
+                  Close
+                </Button>
+                <Button 
+                  onClick={() => {
+                    setPracticeStep("record")
+                    setPracticeAnalysis(null)
+                  }}
+                >
+                  <Video className="mr-2 h-4 w-4" />
+                  Practice Again
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
