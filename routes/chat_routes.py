@@ -8,6 +8,8 @@ from services.vector_store import VectorStore
 from services.supabase_client import supabase
 from utils.json_parser import format_response
 from services.github.github_analysis import GitHubAnalysisService  
+from services.rag_factory import RAGFactory
+from config.feature_flags import feature_flags
 import os
 
 load_dotenv()
@@ -46,16 +48,31 @@ class ChatResponse(BaseModel):
 def chat(request: ChatRequest):
     try:
         query_embedding = embedder.generate_embedding(request.message)
+        # TODO: possibly add more stuff from the original resume(?) since they are in chunks 
+        if feature_flags.ENABLE_CUSTOM_RAG or feature_flags.ENABLE_GRAPH_RAG:
+            rag_factory = RAGFactory()
+            matches = rag_factory.search_candidates(
+                query_text=request.message,
+                top_k=10,
+                filters=None
+            )
+            print(f"RAG matches found: {matches}")
+        else:   
+            # fallback to the original way if nothing is enabled - no chunking of resumes 
+            query_embedding = embedder.generate_embedding(request.message)
 
-        # Search across ALL candidates' resumes AND GitHub portfolios
-        matches = VectorStore.search_similar_resumes(
-            query_embedding=query_embedding,
-            top_k=5,
-            threshold=0.1
-        )
+            # Search across ALL candidates' resumes 
+            matches = VectorStore.search_similar_resumes(
+                query_embedding=query_embedding,
+                top_k=5,
+                threshold=0.1
+            )
 
         if not matches:
-            return ChatResponse(response="No matching candidates found.")  
+             return ChatResponse(
+                response=None,  
+                raw_response="No matching candidates found."
+            )
 
         enriched_candidates = []
         seen_students = set()  # Track students we've already processed
@@ -76,21 +93,24 @@ def chat(request: ChatRequest):
             profile = profile_resp.data[0]
             github_username = profile.get("github_username", "N/A")
             
-            # Get GitHub portfolio data for this student
-            github_matches = VectorStore.search_github_repos(
-                query_embedding=query_embedding,
-                student_id=sid,
-                top_k=3,  # Top 3 relevant projects per candidate
-                threshold=0.0
-            )
-            
             # Format GitHub projects with deep analysis
             github_projects = []
             portfolio_summary = None
             
+            # TODO: check why it is going into this loop even when no github 
             # Get portfolio-level analysis if GitHub username exists
-            if github_username != "N/A" and sid:
+            if github_username != "N/A" or github_username != None and sid:
                 try:
+                    if not query_embedding:
+                        query_embedding = embedder.generate_embedding(request.message)
+
+                    # Get GitHub portfolio data for this student
+                    github_matches = VectorStore.search_github_repos(
+                        query_embedding=query_embedding,
+                        student_id=sid,
+                        top_k=3,  # Top 3 relevant projects per candidate
+                        threshold=0.0
+                    )
                     # Use comprehensive analysis method with "quick" type
                     portfolio_summary = github_analyzer.analyze_portfolio_comprehensive(
                         student_id=sid,
@@ -107,22 +127,22 @@ def chat(request: ChatRequest):
                     print(f"Portfolio analysis error for {github_username}: {analysis_error}")
                     portfolio_summary = None
             
-            for gh in github_matches:
-                repo_name = gh.get("repo_name", "Unknown")
-                metadata = gh.get("metadata", {})
-                language = metadata.get("language", "N/A")
-                topics = metadata.get("topics", [])
-                stars = metadata.get("stars", 0)
-                text_snippet = gh.get("text", "")[:200]  # Short snippet
-                
-                github_projects.append({
-                    "repo_name": repo_name,
-                    "language": language,
-                    "topics": topics,
-                    "stars": stars,
-                    "description": text_snippet,
-                    "similarity": gh.get("similarity", 0.0)
-                })
+                for gh in github_matches:
+                    repo_name = gh.get("repo_name", "Unknown")
+                    metadata = gh.get("metadata", {})
+                    language = metadata.get("language", "N/A")
+                    topics = metadata.get("topics", [])
+                    stars = metadata.get("stars", 0)
+                    text_snippet = gh.get("text", "")[:200]  # Short snippet
+                    
+                    github_projects.append({
+                        "repo_name": repo_name,
+                        "language": language,
+                        "topics": topics,
+                        "stars": stars,
+                        "description": text_snippet,
+                        "similarity": gh.get("similarity", 0.0)
+                    })
             
             enriched_candidates.append({
                 "student_id": sid,
@@ -202,7 +222,7 @@ def chat(request: ChatRequest):
                 • [Bullet 2: Highlight relevant skills or projects with technical evidence]
                 • [Bullet 3: Note any standout achievements or portfolio insights]
             (3) Notable GitHub projects that demonstrate relevant skills (use project analysis data)
-            (4) Recommended next step (interview/phone screen/reject)
+            (4) Recommended next step (interview/phone screen/reject) - if the fit score is 8 or above, recommend interview
 
             **Evaluation Framework:**
 
@@ -258,7 +278,7 @@ def chat(request: ChatRequest):
                         "Project 1: Description",
                         "Project 2: Description"
                     ],
-                    "next_step": "Phone Screen",
+                    "next_step": "Interview | Phone Screen | Reject",
                     "github_link": "https://github.com/username",
                     "candidate_link": ""
                 }

@@ -6,6 +6,7 @@ from services.embedding_service import *
 from services.llama_wrappers import custom_llm, custom_embed_model, local_llm_client
 from dotenv import load_dotenv
 from typing import List, Dict, Optional
+from services.embedder import embedder
 import json
 import logging
 import cohere
@@ -17,7 +18,6 @@ api_key = os.getenv("COHERE_API_KEY")
 co = cohere.Client(api_key)
 
 logger = logging.getLogger(__name__)
-embedder = EmbeddingService()
 
 class CustomRAGService:
 
