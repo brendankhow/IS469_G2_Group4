@@ -1,4 +1,4 @@
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Any
 from llama_index.core.indices.property_graph import PropertyGraphIndex, ImplicitPathExtractor
 from llama_index.core.schema import Document as LlamaDocument
 from llama_index.core import Settings
@@ -247,3 +247,33 @@ class GraphRAGService:
         except Exception as e:
             logger.error(f"Query failed: {str(e)}", exc_info=True)
             return {"success": False, "query": query_text, "error": str(e)}
+
+    @staticmethod
+    def delete_nodes(student_id: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Delete GraphRAG nodes via VectorStore.
+        
+        Args:
+            student_id: optional student ID
+                        if provided, deletes only that student's nodes
+                        if None, deletes all nodes
+        
+        Returns:
+            Dict containing success status, count of deleted nodes, and message
+        """
+        try:
+            count = VectorStore.delete_graph_nodes(student_id)
+            
+            return {
+                "success": True,
+                "count": count,
+                "message": f"Successfully deleted {count} nodes" + 
+                          (f" for student {student_id}" if student_id else " globally")
+            }
+        except Exception as e:
+            print(f"Error deleting GraphRAG nodes: {str(e)}")
+            return {
+                "success": False,
+                "count": 0,
+                "message": f"Failed to delete nodes: {str(e)}"
+            }
