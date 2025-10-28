@@ -1,5 +1,6 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
+from typing import Optional
 from services.graphrag_service import GraphRAGService
 
 router = APIRouter()
@@ -42,3 +43,27 @@ def build_global_index():
         return {"success": True, "message": "Global GraphRAG index built successfully."}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Indexing failed: {str(e)}")
+
+@router.delete("/delete-graphrag-nodes")
+async def delete_graph_nodes(
+    student_id: Optional[str] = Query(
+        None, 
+        description="Student ID to delete nodes for. If not provided, deletes ALL nodes (use with caution!)"
+    )
+):
+    """
+    Delete GraphRAG nodes.
+    - if student_id is provided: deletes only that student's nodes
+    - if student_id is NOT provided: deletes ALL nodes (WARNING : this cannot be undone!)
+    """
+    
+    result = GraphRAGService.delete_nodes(student_id)
+    
+    if not result["success"]:
+        raise HTTPException(status_code=500, detail=result["message"])
+    
+    return {
+        "message": result["message"],
+        "deleted_count": result["count"],
+        "student_id": student_id
+    }

@@ -579,10 +579,12 @@ class VectorStore:
         If student_id is provided, deletes only that student's nodes.
         Otherwise, deletes all nodes (use with caution!).
         """
-        query = supabase.table("graphrag_portfolio").delete()
         if student_id:
-            query = query.eq("student_id", student_id)
-        response = query.execute()
+            response = supabase.table("graphrag_portfolio").delete().eq("student_id", student_id).execute()
+        else:
+            # delete all: match rows where student_id is not null (matches all UUIDs)
+            response = supabase.table("graphrag_portfolio").delete().not_.is_("student_id", "null").execute()
+
         count = len(response.data) if response.data else 0
         if student_id:
             print(f"Deleted {count} GraphRAG nodes for student {student_id}")
@@ -601,7 +603,7 @@ class VectorStore:
         # get all resume documents
 
         resume_response = supabase.table("resume_embeddings")\
-            .select("student_id, resume_text, filename, metadata, student_name, student_email")\
+            .select("student_id, resume_text, filename, metadata")\
             .execute()
 
         for resume in resume_response.data:
@@ -616,8 +618,6 @@ class VectorStore:
                 "source": "resume",
                 "filename": resume.get('filename', 'unknown'),
                 "metadata": resume.get('metadata', {}),
-                "student_name": resume.get('student_name'),
-                "student_email": resume.get('student_email'),
                 "github_username": None
             })
 

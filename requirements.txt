@@ -10,4 +10,7 @@ python-multipart
 yt_dlp
 llama-index
 ollama
+torch 
+torchvision
+opencv-python
 cohere
