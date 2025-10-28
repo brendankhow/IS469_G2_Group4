@@ -3,7 +3,7 @@ class FeatureFlags:
     
     # Enable/disable specific RAG implementation
     # if both false it will fallback to use the original one 
-    ENABLE_CUSTOM_RAG: bool = False
+    ENABLE_CUSTOM_RAG: bool = True
     ENABLE_GRAPH_RAG: bool = False
 
     # for github analysis - check if github username is available or smth 
