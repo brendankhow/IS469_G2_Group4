@@ -72,15 +72,13 @@ class RAGFactory:
         
         Custom RAG format:
         {
+            "id": "...",
             "student_id": "...",
-            "max_similarity": 0.417,
-            "student_name": "...",
-            "best_chunk": {
-                "id": "...",
-                "text": "...",
-                "source": "resume",
-                "filename": "..."
-            }
+            "resume_text": "...",
+            "filename": "...",
+            "metadata": {...},
+            "similarity": 0.395,
+            "rerank_score": 0.924
         }
 
         Graph RAG format:
@@ -116,6 +114,7 @@ class RAGFactory:
             
             # Normalize similarity field
             similarity = (
+                result.get("rerank_score") or # i'm using the rerank score as the best score from custom rag 
                 result.get("similarity") or 
                 result.get("max_similarity") or 
                 result.get("score") or 

@@ -219,7 +219,7 @@ def chat(request: ChatRequest):
                 • [Bullet 2: Highlight relevant skills or projects with technical evidence]
                 • [Bullet 3: Note any standout achievements or portfolio insights]
             (3) Notable GitHub projects that demonstrate relevant skills (use project analysis data)
-            (4) Recommended next step (interview/phone screen/reject)
+            (4) Recommended next step (interview/phone screen/reject) - if the fit score is 8 or above, recommend interview
 
             **Evaluation Framework:**
 
@@ -275,7 +275,7 @@ def chat(request: ChatRequest):
                         "Project 1: Description",
                         "Project 2: Description"
                     ],
-                    "next_step": "Phone Screen",
+                    "next_step": "Interview | Phone Screen | Reject",
                     "github_link": "https://github.com/username",
                     "candidate_link": ""
                 }
