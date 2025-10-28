@@ -2,6 +2,7 @@ from typing import List, Dict, Any, Optional
 from config.feature_flags import feature_flags
 from services.customrag_service import CustomRAGService
 from services.graphrag_service import GraphRAGService  
+from utils.timer import time_this_function
 
 class RAGFactory:
     """Factory for Custom and Graph RAG strategies"""
@@ -10,6 +11,7 @@ class RAGFactory:
         self.customrag_service = CustomRAGService()
         self.graphrag_service = GraphRAGService()  
     
+    @time_this_function
     def search_candidates(
         self, 
         query_text: str,

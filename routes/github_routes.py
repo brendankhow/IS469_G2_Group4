@@ -6,6 +6,7 @@ from services.github.github_embedder import process_github_repos
 from services.github.github_analysis import github_analysis_service
 from services.vector_store import VectorStore
 from services.llm_client import llm_client
+from utils.timer import time_this_function
 
 router = APIRouter()
 
@@ -17,6 +18,7 @@ class GitHubPortfolioResponse(BaseModel):
     documents: list
 
 @router.post("/create", response_model=GitHubPortfolioResponse)
+@time_this_function
 def build_portfolio(request: GitHubPortfolioRequest):
     """
     Build GitHub portfolio for a user by fetching their repos,
@@ -87,12 +89,13 @@ async def delete_github_embeddings(student_id: str):
 class AnalysisRequest(BaseModel):
     student_id: str
     github_username: str
-    analysis_type: str = "full"  # full, quick, interview_prep, resume, job_fit
+    analysis_type: str = "quick"  # full, quick, interview_prep, resume, job_fit
 
 class AnalysisResponse(BaseModel):
     analysis: Dict[str, Any]
 
 @router.post("/analyze", response_model=AnalysisResponse)
+@time_this_function
 def analyze_portfolio(request: AnalysisRequest):
     """
     Comprehensive AI analysis of student's GitHub portfolio.
@@ -135,6 +138,7 @@ class ProjectDeepDiveRequest(BaseModel):
     analysis_focus: str = "all"  # all, technical, presentation, interview
 
 @router.post("/analyze/project", response_model=AnalysisResponse)
+@time_this_function
 def analyze_single_project(request: ProjectDeepDiveRequest):
     """
     Deep dive analysis of a single GitHub project.
@@ -219,6 +223,7 @@ class GithubFollowupRequest(BaseModel):
     temperature: float = 0.7
 
 @router.post("/followup", response_model=AnalysisResponse)
+@time_this_function
 def analyze_chat(request: GithubFollowupRequest):
     """
     Follow-up questions about a student's GitHub analysis.

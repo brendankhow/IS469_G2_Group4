@@ -10,6 +10,7 @@ from utils.json_parser import format_response
 from services.github.github_analysis import GitHubAnalysisService  
 from services.rag_factory import RAGFactory
 from config.feature_flags import feature_flags
+from utils.timer import time_this_function
 import os
 
 load_dotenv()
@@ -45,6 +46,7 @@ class ChatResponse(BaseModel):
     raw_response: Optional[str] = None  # Fallback if JSON parsing fails
 
 @router.post("/community", response_model=ChatResponse)
+@time_this_function  
 def chat(request: ChatRequest):
     try:
         query_embedding = embedder.generate_embedding(request.message)
