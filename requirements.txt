@@ -14,3 +14,4 @@ torch
 torchvision
 opencv-python
 cohere
+numpy<2
