@@ -27,6 +27,7 @@ interface Applicant {
   personality_analysis_id?: string | null
   status: "pending" | "accepted" | "rejected"
   created_at: string
+  aiRank?: number  // Added for AI matching ranking
 }
 
 interface ChatMessage {
@@ -328,28 +329,42 @@ export default function ApplicantsPage() {
       
       const searchData = await searchResponse.json()
       
-      // Step 4: Format and display results
+      // Step 4: Format and display results with ranking
       if (searchData.success && searchData.results.length > 0) {
         const results = searchData.results
-        let summary = `**AI Matching Results** (${results.length} of ${applicants.length} applicants analyzed)\n\n`
+        let summary = `**🏆 Top Candidates Ranked**\n\n`
         
         results.forEach((result: any, index: number) => {
           const profile = result.profile || {}
+          const rank = index + 1
+          const medal = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : `${rank}.`
           const matchPercentage = Math.round(result.similarity * 100)
           
           // Find the applicant to get their application status
           const applicant = applicants.find(app => app.student_id === result.student_id)
           
-          summary += `**${index + 1}. ${profile.name || 'Unknown'}** - ${matchPercentage}% match\n`
+          summary += `${medal} **${profile.name || 'Unknown'}** - ${matchPercentage}% match\n`
           summary += `• Skills: ${profile.skills || 'N/A'}\n`
-          summary += `• Email: ${profile.email || 'N/A'}\n`
           if (applicant) {
             summary += `• Status: ${applicant.status.toUpperCase()}\n`
           }
           summary += `\n`
         })
         
+        // Store ranking data for card highlighting
+        const rankedStudentIds = results.map((r: any) => r.student_id)
         setAiMatchingResults(summary)
+        
+        // Add ranking to applicants (this will help visually identify them on cards)
+        setApplicants(prevApplicants => 
+          prevApplicants.map(app => {
+            const rankIndex = rankedStudentIds.indexOf(app.student_id)
+            return {
+              ...app,
+              aiRank: rankIndex >= 0 ? rankIndex + 1 : undefined
+            }
+          })
+        )
       } else {
         setAiMatchingResults("No matching candidates found among the applicants for this job.")
       }
@@ -531,12 +546,14 @@ export default function ApplicantsPage() {
             ) : (
               <div className="space-y-3">
                 <ScrollArea className="max-h-[400px] pr-4">
-                  <div className="rounded-lg bg-secondary/50 p-4 text-sm">
+                  <div className="rounded-lg bg-secondary/50 p-4">
                     {aiMatchingResults?.split('\n').map((line, index) => {
-                      if (line.startsWith('**')) {
-                        return <p key={index} className="font-bold text-primary mt-3 first:mt-0">{line.replace(/\*\*/g, '')}</p>
+                      if (line.startsWith('**') && line.includes('🏆')) {
+                        return <p key={index} className="font-bold text-lg text-primary mb-4">{line.replace(/\*\*/g, '')}</p>
+                      } else if (line.startsWith('🥇') || line.startsWith('🥈') || line.startsWith('🥉') || /^\d+\./.test(line)) {
+                        return <p key={index} className="font-semibold text-base mt-3 first:mt-0">{line.replace(/\*\*/g, '')}</p>
                       } else if (line.startsWith('•')) {
-                        return <p key={index} className="text-muted-foreground ml-2">{line}</p>
+                        return <p key={index} className="text-sm text-muted-foreground ml-4">{line}</p>
                       } else if (line.trim()) {
                         return <p key={index} className="text-muted-foreground">{line}</p>
                       }
@@ -562,11 +579,34 @@ export default function ApplicantsPage() {
       ) : (
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
           {applicants.map((applicant) => (
-            <Card key={applicant.id} className="hover:border-primary/50">
+            <Card 
+              key={applicant.id} 
+              className={`hover:border-primary/50 ${
+                applicant.aiRank === 1 ? 'border-yellow-500 border-2 shadow-lg' : 
+                applicant.aiRank === 2 ? 'border-gray-400 border-2 shadow-md' : 
+                applicant.aiRank === 3 ? 'border-amber-700 border-2 shadow-md' : 
+                applicant.aiRank ? 'border-primary/30' : ''
+              }`}
+            >
               <CardHeader>
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
-                    <CardTitle className="text-lg">{applicant.student_name || "Anonymous"}</CardTitle>
+                    <div className="flex items-center gap-2">
+                      <CardTitle className="text-lg">{applicant.student_name || "Anonymous"}</CardTitle>
+                      {applicant.aiRank && (
+                        <Badge 
+                          variant="outline" 
+                          className={`
+                            ${applicant.aiRank === 1 ? 'bg-yellow-500/10 text-yellow-600 border-yellow-500/50 font-bold' : ''}
+                            ${applicant.aiRank === 2 ? 'bg-gray-400/10 text-gray-600 border-gray-400/50 font-bold' : ''}
+                            ${applicant.aiRank === 3 ? 'bg-amber-700/10 text-amber-700 border-amber-700/50 font-bold' : ''}
+                            ${applicant.aiRank > 3 ? 'bg-primary/10 text-primary border-primary/50' : ''}
+                          `}
+                        >
+                          {applicant.aiRank === 1 ? '🥇' : applicant.aiRank === 2 ? '🥈' : applicant.aiRank === 3 ? '🥉' : `#${applicant.aiRank}`} AI Match
+                        </Badge>
+                      )}
+                    </div>
                     <CardDescription className="mt-1">
                       Applied {new Date(applicant.created_at).toLocaleDateString()}
                     </CardDescription>

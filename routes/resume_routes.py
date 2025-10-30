@@ -243,6 +243,11 @@ async def search_candidates(request: CandidateSearchRequest):
             # Convert both to strings for comparison (in case one is UUID object)
             results = [r for r in results if str(r.get("student_id")) in student_ids]
             print(f"After filtering: {len(results)} results matching student IDs")
+            
+            # Log similarity scores for debugging
+            for r in results:
+                print(f"  Candidate {r.get('student_id')}: similarity = {r.get('similarity')}")
+            
             # Limit to top_k after filtering
             results = results[:top_k]
         
