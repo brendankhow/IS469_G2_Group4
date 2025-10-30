@@ -467,7 +467,7 @@ export default function HeadhuntingPage() {
                                         <div className="flex gap-2 items-center">
                                           <Badge variant={candidate.fit_score >= 80 ? "default" : candidate.fit_score >= 60 ? "secondary" : "outline"} className="border-2">
                                             <Star className="h-3 w-3 mr-1" />
-                                            Fit Score: {candidate.fit_score}%
+                                            Fit Score: {candidate.fit_score}/10
                                           </Badge>
                                         </div>
                                       </div>
