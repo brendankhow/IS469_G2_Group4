@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -159,6 +159,9 @@ export default function GithubAssistantPage() {
   const chatHistory = activeTab === "overall" ? overallChatHistory : activeTab === "repository" ? repositoryChatHistory : jobFitChatHistory
   const setChatHistory = activeTab === "overall" ? setOverallChatHistory : activeTab === "repository" ? setRepositoryChatHistory : setJobFitChatHistory
 
+  // Ref for chat scroll area
+  const chatScrollRef = useRef<HTMLDivElement>(null)
+
   useEffect(() => {
     fetchProfile()
   }, [])
@@ -215,6 +218,16 @@ export default function GithubAssistantPage() {
       saveGithubChats(allChats)
     }
   }, [overallChatHistory, repositoryChatHistory, jobFitChatHistory, profile])
+
+  // Auto-scroll to bottom when chat history or active tab changes
+  useEffect(() => {
+    if (chatScrollRef.current) {
+      const scrollContainer = chatScrollRef.current.querySelector('[data-radix-scroll-area-viewport]')
+      if (scrollContainer) {
+        scrollContainer.scrollTop = scrollContainer.scrollHeight
+      }
+    }
+  }, [chatHistory, loading, activeTab])
 
   const fetchProfile = async () => {
     try {
@@ -951,7 +964,7 @@ ${analysis.portfolio_value.roles_this_demonstrates_fit_for?.map((r: string) => `
                 <TabsContent value="overall" className="flex-1 flex flex-col m-0 data-[state=active]:flex overflow-hidden">
                   {/* Overall Analysis Content */}
                   <div className="flex-1 overflow-hidden">
-                    <ScrollArea className="h-full p-8">
+                    <ScrollArea ref={chatScrollRef} className="h-full p-8">
                       <div className="pb-4">
                         {overallChatHistory.length === 0 ? (
                     <div className="flex flex-col items-center justify-center h-full min-h-[400px] p-4">

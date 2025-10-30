@@ -401,6 +401,11 @@ def chat_with_history(request: ChatHistoryRequest) -> ChatResponse:
                         # Generate embedding for the question
                         query_embedding = embedder.generate_embedding(last_user_message)
                         
+                        # Get full resume text from resume_embeddings table
+                        full_resume_data = VectorStore.get_resume_by_student_id(request.student_id)
+                        if full_resume_data and full_resume_data.get("resume_text"):
+                            context_parts.append(f"Full Resume:\n{full_resume_data['resume_text']}")
+                        
                         # Search unified portfolio for relevant information
                         relevant_chunks = VectorStore.search_unified_portfolio(
                             query_embedding=query_embedding,

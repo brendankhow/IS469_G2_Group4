@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -132,6 +132,9 @@ export default function HeadhuntingPage() {
   const [currentChatMessage, setCurrentChatMessage] = useState("")
   const [sendingMessage, setSendingMessage] = useState(false)
   
+  // Ref for chat scroll area
+  const chatScrollRef = useRef<HTMLDivElement>(null)
+  
   // Load chat history from localStorage on mount
   useEffect(() => {
     const loadedChats = loadChatHistory()
@@ -154,6 +157,16 @@ export default function HeadhuntingPage() {
       saveSearchHistory(searchHistory)
     }
   }, [searchHistory])
+
+  // Auto-scroll to bottom when chat opens or messages change
+  useEffect(() => {
+    if (chatOpen && chatScrollRef.current) {
+      const scrollContainer = chatScrollRef.current.querySelector('[data-radix-scroll-area-viewport]')
+      if (scrollContainer) {
+        scrollContainer.scrollTop = scrollContainer.scrollHeight
+      }
+    }
+  }, [chatOpen, candidateChats])
 
   const handleSearch = async () => {
     if (!searchQuery.trim()) {
@@ -716,7 +729,7 @@ export default function HeadhuntingPage() {
             <>
               {/* Chat Messages */}
               <div className="flex-1 overflow-hidden">
-                <ScrollArea className="h-full p-6">
+                <ScrollArea ref={chatScrollRef} className="h-full p-6">
                   <div className="space-y-4">
                     {candidateChats[selectedCandidate.student_id].messages.map((message, index) => (
                       <div

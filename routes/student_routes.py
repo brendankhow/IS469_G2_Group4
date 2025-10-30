@@ -163,6 +163,12 @@ async def candidate_chatbot(payload: ChatbotRequest):
         # Generate embedding for the question
         query_embedding = embedder.generate_embedding(message)
         
+        # Get full resume text from resume_embeddings table
+        full_resume_data = VectorStore.get_resume_by_student_id(student_id)
+        context_parts = []
+        if full_resume_data and full_resume_data.get("resume_text"):
+            context_parts.append(f"Full Resume: {full_resume_data['resume_text']}")
+        
         # Search unified portfolio for relevant information
         relevant_chunks = VectorStore.search_unified_portfolio(
             query_embedding=query_embedding,
@@ -172,7 +178,6 @@ async def candidate_chatbot(payload: ChatbotRequest):
         )
         
         # Build context from relevant chunks
-        context_parts = []
         for chunk in relevant_chunks:
             source = chunk.get("source", "")
             if source == "resume":

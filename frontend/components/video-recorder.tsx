@@ -30,7 +30,7 @@ export function VideoRecorder({
   const [videoUrl, setVideoUrl] = useState<string | null>(null)
   const [timeElapsed, setTimeElapsed] = useState(0)
   const [error, setError] = useState<string | null>(null)
-  const [mode, setMode] = useState<"record" | "upload">("record")
+  const [mode, setMode] = useState<"record" | "upload">(allowUpload ? "record" : "upload")
   const timerRef = useRef<NodeJS.Timeout | null>(null)
 
   // Calculate max bitrate to stay under 100MB for 60s

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -89,6 +89,9 @@ export default function InterviewAssistantPage() {
   const [practiceStep, setPracticeStep] = useState<"record" | "analyzing" | "results">("record")
   const [practiceAnalysis, setPracticeAnalysis] = useState<any>(null)
 
+  // Ref for chat scroll area
+  const chatScrollRef = useRef<HTMLDivElement>(null)
+
   useEffect(() => {
     fetchProfile()
   }, [])
@@ -119,6 +122,16 @@ export default function InterviewAssistantPage() {
       saveInterviewChats(allChats)
     }
   }, [chatHistory, profile])
+
+  // Auto-scroll to bottom when chat history changes
+  useEffect(() => {
+    if (chatScrollRef.current) {
+      const scrollContainer = chatScrollRef.current.querySelector('[data-radix-scroll-area-viewport]')
+      if (scrollContainer) {
+        scrollContainer.scrollTop = scrollContainer.scrollHeight
+      }
+    }
+  }, [chatHistory, loading])
 
   const fetchProfile = async () => {
     try {
@@ -304,7 +317,7 @@ export default function InterviewAssistantPage() {
             ) : (
               <>
                 {/* Chat History */}
-                <ScrollArea className="flex-1 p-8 overflow-y-auto h-full">
+                <ScrollArea ref={chatScrollRef} className="flex-1 p-8 overflow-y-auto h-full">
                   {chatHistory.length === 0 ? (
                     <div className="flex flex-col items-center justify-center h-full text-center space-y-4 min-h-[400px]">
                       <MessageSquare className="h-16 w-16 text-muted-foreground/50" />
@@ -544,6 +557,7 @@ export default function InterviewAssistantPage() {
               onVideoReady={handlePracticeVideoComplete}
               maxDuration={60}
               minDuration={10}
+              allowUpload={false}
             />
           )}
           
