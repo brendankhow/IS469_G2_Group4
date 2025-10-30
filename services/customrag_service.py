@@ -47,120 +47,87 @@ class CustomRAGService:
                 top_k=top_k*5,  # retrieve more to give reranker options
                 threshold=threshold
             )
+            
+            # --- Retrieve Relevant Github Profiles ---
+            logger.info(f"Searching GitHub Profiles...")
+            retrieved_githubs = VectorStore.search_similar_github_profiles(
+                query_embedding=query_embedding,
+                top_k=top_k*5,
+                threshold=threshold
+            )
 
-            if not retrieved_resumes:
-                logger.warning("No relevant resumes found in VectorStore.")
+            # If no data found
+            if not retrieved_resumes and not retrieved_githubs:
+                logger.warning("No relevant documents found.")
                 return []
+            
+            # Prepare combined docs for reranking
+            combined_docs = []
+            id_map = []
 
-            # prepare text list for reranking
-            resume_texts = [r["resume_text"] for r in retrieved_resumes]
+            for r in retrieved_resumes:
+                combined_docs.append(r["resume_text"])
+                id_map.append({"student_id": r.get("student_id"), "type": "resume"})
+
+            for g in retrieved_githubs:
+                combined_docs.append(g["chunk_text"])
+                id_map.append({"student_id": g.get("student_id"), "type": "github"})
 
             # --- Call Cohere reranker ---
             response = co.rerank(
                 model="rerank-english-v3.0",
                 query=query_text,
-                documents=resume_texts
+                documents=combined_docs
             )
 
-            # attach rerank scores
+            # --- Combine rerank results ---
+            ranked_entries = []
             for i, r in enumerate(response.results):
-                retrieved_resumes[i]["rerank_score"] = r.relevance_score
+                entry = id_map[i]
+                score = r.relevance_score
+                if entry["type"] == "resume":
+                    record = next((res for res in retrieved_resumes if res["student_id"] == entry["student_id"]), None)
+                else:
+                    record = next((git for git in retrieved_githubs if git["student_id"] == entry["student_id"]), None)
+                if record:
+                    ranked_entries.append({
+                        "student_id": entry["student_id"],
+                        "type": entry["type"],
+                        "text": record["resume_text"] if entry["type"] == "resume" else record["chunk_text"],
+                        "rerank_score": score
+                    })
 
-            # --- Rank Resumes by Relevance ---
+            # --- Merge resume + github per student ---
+            merged_candidates = {}
+            for item in ranked_entries:
+                sid = item["student_id"]
+                if sid not in merged_candidates:
+                    merged_candidates[sid] = {
+                        "student_id": sid,
+                        "resume": None,
+                        "github": None,
+                        "combined_score": 0.0
+                    }
+
+                if item["type"] == "resume":
+                    merged_candidates[sid]["resume"] = item
+                else:
+                    merged_candidates[sid]["github"] = item
+
+                merged_candidates[sid]["combined_score"] += item["rerank_score"]
+
+            # --- Rank by combined score ---
             ranked_candidates = sorted(
-                retrieved_resumes,
-                key=lambda r: r.get("rerank_score", 0.0),
+                merged_candidates.values(),
+                key=lambda x: x["combined_score"],
                 reverse=True
             )
 
             # --- Return Top K Candidates ---
             top_results = ranked_candidates[:top_k]
-            logger.info(f"Returning top {len(top_results)} ranked resumes based on rerank score.")
+            logger.info(f"Returning top {len(top_results)} ranked candidates.")
             return top_results
 
         except Exception as e:
             logger.error(f"Custom RAG query failed: {str(e)}", exc_info=True)
             return []
-        
-    # # Resume chunks based RAG
-    # @staticmethod
-    # def query_custom_rag(
-    #     query_text: str,
-    #     top_k: int = 3, # No. of candidates
-    #     filters: Optional[Dict] = None, 
-    #     top_k_chunks: int = 45, # No. of chunks
-    #     threshold: float = 0.3
-    # ) -> List[Dict]:
-    #     """
-    #     Ranks top candidates based on the similarity of their RESUME chunks to a query.
-    #     Uses the global 'search_similar_resume_chunks' function.
-    #     """
-    #     logger.info(f"Received Custom RAG query: {query_text[:100]}...")
-    #     logger.info(f"Ranking top {top_k} candidates.")
-
-    #     try:
-    #         # --- Embed the Query ---
-    #         query_embedding = embedder.generate_embedding(query_text)
-
-    #         # --- Retrieve Relevant chunks ---
-    #         logger.info(f"Searching resume chunks globally using search_similar_resume_chunks...")
-    #         retrieved_chunks = VectorStore.search_similar_resume_chunks(
-    #             query_embedding=query_embedding,
-    #             top_k=top_k_chunks,
-    #             threshold=threshold
-    #         )
-
-    #         if not retrieved_chunks:
-    #             logger.warning("No relevant resume chunks found in VectorStore.")
-    #             return []
-            
-    #         # prepare text list for reranking
-    #         chunk_texts = [c["chunk_text"] for c in retrieved_chunks]
-
-    #         # call cohere reranker
-    #         response = co.rerank(
-    #             model="rerank-english-v3.0",
-    #             query=query_text,
-    #             documents=chunk_texts
-    #         )
-
-    #         # Add the rerank score back to the original chunks
-    #         for i, r in enumerate(response.results):
-    #             retrieved_chunks[i]["rerank_score"] = r.relevance_score
-
-    #         # --- Group Chunks by Candidate & Find Best Score ---
-    #         student_scores = {}
-    #         for chunk in retrieved_chunks:
-    #             sid = chunk.get("student_id")
-    #             # similarity = chunk.get("similarity", 0.0) # without re-ranking
-    #             similarity = chunk.get("rerank_score", chunk.get("similarity", 0.0)) # with cohere re-ranking
-    #             if not sid: continue
-
-    #             if sid not in student_scores or similarity > student_scores[sid]['max_similarity']:
-    #                 student_scores[sid] = {
-    #                     "student_id": sid,
-    #                     "max_similarity": similarity,
-    #                     "student_name": chunk.get("student_name", "N/A"), # From SQL JOIN
-    #                     "best_chunk": {
-    #                         "id": chunk.get("id"),
-    #                         "text": chunk.get("chunk_text", ""), # From SQL
-    #                         "source": "resume",
-    #                         "filename": chunk.get("file_name_alias", "N/A") # Alias from SQL
-    #                     }
-    #                 }
-
-    #         # --- Rank Candidates by their Best Score ---
-    #         ranked_candidates = sorted(
-    #             student_scores.values(),
-    #             key=lambda candidate: candidate["max_similarity"],
-    #             reverse=True
-    #         )
-
-    #         # --- Return the Top K Candidates ---
-    #         top_results = ranked_candidates[:top_k]
-    #         logger.info(f"Returning top {len(top_results)} ranked candidates based on best chunk similarity.")
-    #         return top_results
-
-    #     except Exception as e:
-    #         logger.error(f"Custom RAG query failed: {str(e)}", exc_info=True)
-    #         return []
