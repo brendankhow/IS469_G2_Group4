@@ -299,34 +299,59 @@ export default function ApplicantsPage() {
       
       const jobDescription = jobData.job.description
       
-      // Step 2: Call /resume/search
+      // Step 2: Extract student IDs from current applicants
+      const applicantStudentIds = applicants
+        .map(app => app.student_id)
+        .filter(id => id != null) // Filter out any null/undefined values
+      
+      if (applicantStudentIds.length === 0) {
+        setAiMatchingResults("No applicants with valid student IDs found for this job.")
+        return
+      }
+      
+      console.log(`Matching ${applicantStudentIds.length} applicants for this job:`, applicantStudentIds)
+      
+      // Step 3: Call /resume/search with student_id filter
       const searchResponse = await fetch('http://localhost:8000/resume/search', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({
+        headers: { 'Content-Type': 'application/json' }, // Changed to JSON
+        body: JSON.stringify({
           job_description: jobDescription,
-          top_k: applicants.length.toString() // Search among current applicants
+          top_k: applicants.length,
+          student_ids: applicantStudentIds // Filter by these student IDs only
         })
       })
       
+      if (!searchResponse.ok) {
+        throw new Error('Failed to search candidates')
+      }
+      
       const searchData = await searchResponse.json()
       
-      // Step 3: Format and display results
+      // Step 4: Format and display results
       if (searchData.success && searchData.results.length > 0) {
         const results = searchData.results
-        let summary = `**AI Matching Results** (${results.length} candidates analyzed)\n\n`
+        let summary = `**AI Matching Results** (${results.length} of ${applicants.length} applicants analyzed)\n\n`
         
         results.forEach((result: any, index: number) => {
           const profile = result.profile || {}
           const matchPercentage = Math.round(result.similarity * 100)
+          
+          // Find the applicant to get their application status
+          const applicant = applicants.find(app => app.student_id === result.student_id)
+          
           summary += `**${index + 1}. ${profile.name || 'Unknown'}** - ${matchPercentage}% match\n`
           summary += `• Skills: ${profile.skills || 'N/A'}\n`
-          summary += `• Email: ${profile.email || 'N/A'}\n\n`
+          summary += `• Email: ${profile.email || 'N/A'}\n`
+          if (applicant) {
+            summary += `• Status: ${applicant.status.toUpperCase()}\n`
+          }
+          summary += `\n`
         })
         
         setAiMatchingResults(summary)
       } else {
-        setAiMatchingResults("No matching candidates found for this job description.")
+        setAiMatchingResults("No matching candidates found among the applicants for this job.")
       }
     } catch (error) {
       console.error('AI Matching error:', error)

@@ -1,6 +1,6 @@
-from fastapi import APIRouter, HTTPException, Form
-from typing import List
-from pydantic import BaseModel
+from fastapi import APIRouter, HTTPException, Form, Request
+from typing import List, Optional
+from pydantic import BaseModel, Field
 from services.resume_parser import ResumeParser
 from services.embedder import embedder
 from services.vector_store import VectorStore
@@ -190,27 +190,61 @@ async def delete_student_resume_embeddings(student_id: str):
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
     
+class CandidateSearchRequest(BaseModel):
+    job_description: str = Field(..., description="Job description to match against")
+    top_k: int = Field(10, description="Number of results to return", ge=1, le=100)
+    student_ids: Optional[List[str]] = Field(None, description="Filter results to only these student IDs")
+
 # example usage 
 @router.post("/search")
-async def search_candidates(
-    job_description: str = Form(...),
-    top_k: int = Form(10)
-):
+async def search_candidates(request: CandidateSearchRequest):
     """
-    Search for candidates matching a job description
-    Returns top-k most similar resumes with profile data
+    Search for candidates matching a job description.
+    Optionally filter by student_ids for specific applicants (e.g., for a specific job).
+    
+    Returns top-k most similar resumes ranked by match percentage with profile data.
     """
     try:
+        job_description = request.job_description
+        top_k = request.top_k
+        student_ids = request.student_ids  # Optional filter for specific applicants
+        
         print(f"Searching for top {top_k} candidates...")
+        if student_ids:
+            print(f"Filtering by {len(student_ids)} student IDs: {student_ids}")
         
         # Generate embedding for job description
         query_embedding = embedder.generate_embedding(job_description)
         
-        # Search vector database
+        # Search vector database - get MORE results if we're filtering to ensure we capture all applicants
+        # Even if they're not the top matches globally, we need to include them in the search
+        if student_ids:
+            # Get significantly more results to ensure we capture all applicants
+            # This is necessary because the top global matches might not have applied to this job
+            search_limit = max(len(student_ids) * 3, 50)  # Get at least 3x the applicants or 50 results
+            print(f"Expanding search to {search_limit} results to capture all {len(student_ids)} applicants")
+        else:
+            search_limit = top_k
+        
         results = VectorStore.search_similar_resumes(
             query_embedding=query_embedding,
-            top_k=top_k
+            top_k=search_limit,
+            threshold=0.0
         )
+        
+        # Filter by student_ids if provided (only show applicants for this job)
+        if student_ids:
+            print(f"Before filtering: {len(results)} results")
+            # Debug: Print actual student IDs from results
+            for r in results:
+                print(f"  Result student_id: {r.get('student_id')} (type: {type(r.get('student_id'))})")
+            print(f"  Expected student_ids: {student_ids}")
+            
+            # Convert both to strings for comparison (in case one is UUID object)
+            results = [r for r in results if str(r.get("student_id")) in student_ids]
+            print(f"After filtering: {len(results)} results matching student IDs")
+            # Limit to top_k after filtering
+            results = results[:top_k]
         
         # Enrich with profile data
         enriched_results = []
@@ -222,7 +256,7 @@ async def search_candidates(
             
             if profile.data:
                 result["profile"] = profile.data[0]
-            enriched_results.append(result)
+                enriched_results.append(result)
         
         print(f"Found {len(enriched_results)} matching candidates")
         
@@ -230,9 +264,14 @@ async def search_candidates(
             "success": True,
             "query": job_description,
             "results": enriched_results,
-            "count": len(enriched_results)
+            "count": len(enriched_results),
+            "filtered": bool(student_ids)  # Indicates if filtering was applied
         }
     
+    except HTTPException:
+        raise
     except Exception as e:
         print(f"Error searching candidates: {str(e)}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
