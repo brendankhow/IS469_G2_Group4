@@ -13,8 +13,8 @@ interface ChatMessage {
 }
 
 interface Applicant {
-  id: number
-  student_id: number
+  id: string  // UUID
+  student_id: string  // UUID
   student_name?: string
   student_email?: string
   student_phone?: string

@@ -15,8 +15,8 @@ import { PersonalityScoreModal } from "@/components/personality-score-modal"
 import ReactMarkdown from "react-markdown"
 
 interface Applicant {
-  id: number
-  student_id: number
+  id: string  // UUID
+  student_id: string  // UUID
   student_name?: string
   student_email?: string
   student_phone?: string
@@ -112,6 +112,15 @@ export default function ApplicantsPage() {
   const [currentMessage, setCurrentMessage] = useState("")
   const [sendingMessage, setSendingMessage] = useState(false)
   
+  // Scheduling sidebar state
+  const [scheduleOpen, setScheduleOpen] = useState(false)
+  const [selectedCandidateForSchedule, setSelectedCandidateForSchedule] = useState<Applicant | null>(null)
+  const [scheduleMessage, setScheduleMessage] = useState<string>("")
+  const [schedulingInterview, setSchedulingInterview] = useState(false)
+  const [proposedSlots, setProposedSlots] = useState<Array<{ date: string; time: string }>>([])
+  const [confirmedSlot, setConfirmedSlot] = useState<{ date: string; time: string; confirmed_at: string } | null>(null)
+  const [aiScheduleResponse, setAiScheduleResponse] = useState<string>("")
+  
   // PDF Viewer state  
   const [pdfViewerOpen, setPdfViewerOpen] = useState(false)
   const [selectedResumeUrl, setSelectedResumeUrl] = useState<string | null>(null)
@@ -128,11 +137,17 @@ export default function ApplicantsPage() {
   
   const chatScrollRef = useRef<HTMLDivElement>(null)
 
-  // Load chat history from localStorage on mount
+  // Debug: Log when confirmedSlot or proposedSlots change
   useEffect(() => {
     const loaded = loadApplicantChats()
     setApplicantChats(loaded)
   }, [])
+  
+  // Debug: Log when confirmedSlot or proposedSlots change
+  useEffect(() => {
+    console.log("🔄 State changed - confirmedSlot:", confirmedSlot)
+    console.log("🔄 State changed - proposedSlots:", proposedSlots)
+  }, [confirmedSlot, proposedSlots])
   
   // Save chat history to localStorage whenever it changes
   useEffect(() => {
@@ -376,7 +391,7 @@ export default function ApplicantsPage() {
     }
   }
 
-  const updateStatus = async (applicantId: number, status: "accepted" | "rejected") => {
+  const updateStatus = async (applicantId: string, status: "accepted" | "rejected") => {
     try {
       const response = await fetch(`/api/recruiter/applications/${applicantId}/status`, {
         method: "PATCH",
@@ -400,6 +415,103 @@ export default function ApplicantsPage() {
         description: "Failed to update status",
         variant: "destructive",
       })
+    }
+  }
+
+  const handleOpenSchedule = async (applicant: Applicant) => {
+    console.log("Opening schedule for applicant:", applicant.id)
+    setSelectedCandidateForSchedule(applicant)
+    setScheduleMessage("")
+    setAiScheduleResponse("")
+    
+    // Reset previous state first
+    setProposedSlots([])
+    setConfirmedSlot(null)
+    
+    // Fetch existing proposed slots and confirmed slot
+    try {
+      const response = await fetch(`/api/recruiter/applications/${applicant.id}/interview-slots`)
+      console.log("API response status:", response.status)
+      
+      if (response.ok) {
+        const data = await response.json()
+        console.log("✅ Fetched interview slots data:", data)
+        console.log("  - proposedSlots:", data.proposedSlots)
+        console.log("  - confirmedSlot:", data.confirmedSlot)
+        console.log("  - interviewStatus:", data.interviewStatus)
+        
+        setProposedSlots(data.proposedSlots || [])
+        setConfirmedSlot(data.confirmedSlot || null)
+        
+        console.log("State after setting:")
+        console.log("  - proposedSlots set to:", data.proposedSlots || [])
+        console.log("  - confirmedSlot set to:", data.confirmedSlot || null)
+      } else {
+        console.error("❌ Failed to fetch interview slots:", response.status)
+        const errorData = await response.json()
+        console.error("Error details:", errorData)
+      }
+    } catch (error) {
+      console.error("❌ Error fetching interview slots:", error)
+    }
+    
+    setScheduleOpen(true)
+  }
+
+  const handleAIScheduleInterview = async () => {
+    if (!selectedCandidateForSchedule || !scheduleMessage.trim()) return
+    
+    setSchedulingInterview(true)
+    setAiScheduleResponse("")
+    
+    try {
+      // Get recruiter info and job details
+      const jobResponse = await fetch(`/api/jobs/${params.id}`)
+      const jobData = await jobResponse.json()
+      const jobTitle = jobData.job?.title || "Position"
+      
+      // In a real app, you'd get this from the current user session
+      const recruiterName = "Recruiter" // TODO: Get from session
+      const recruiterEmail = "recruiter@company.com" // TODO: Get from session
+      
+      const response = await fetch(`/api/recruiter/applications/${selectedCandidateForSchedule.id}/ai-schedule-interview`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          message: scheduleMessage,
+          recruiterName,
+          recruiterEmail,
+          jobTitle,
+        })
+      })
+      
+      const data = await response.json()
+      
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to schedule interview')
+      }
+      
+      // Update UI with the parsed slots
+      setProposedSlots(data.slots)
+      setAiScheduleResponse(data.message)
+      
+      toast({
+        title: "Interview Slots Scheduled!",
+        description: data.message,
+      })
+      
+      setScheduleMessage("") // Clear input
+    } catch (error) {
+      console.error('AI Scheduling error:', error)
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to schedule interview",
+        variant: "destructive",
+      })
+    } finally {
+      setSchedulingInterview(false)
     }
   }
 
@@ -695,7 +807,7 @@ export default function ApplicantsPage() {
                   )}
 
                   {applicant.status === "accepted" && (
-                    <Button size="sm" variant="outline">
+                    <Button size="sm" variant="outline" onClick={() => handleOpenSchedule(applicant)}>
                       <Calendar className="mr-2 h-4 w-4" />
                       Schedule Interview
                     </Button>
@@ -833,6 +945,186 @@ export default function ApplicantsPage() {
               </Button>
             </div>
           </div>
+        </SheetContent>
+      </Sheet>
+
+      {/* Scheduling Sidebar - AI-Powered */}
+      <Sheet open={scheduleOpen} onOpenChange={(open) => {
+        setScheduleOpen(open)
+        // Clear state when closing
+        if (!open) {
+          setScheduleMessage("")
+          setAiScheduleResponse("")
+          setProposedSlots([])
+          setConfirmedSlot(null)
+        }
+      }}>
+        <SheetContent side="right" className="w-full sm:w-1/3 sm:max-w-none flex flex-col p-0">
+          <SheetHeader className="p-6 pb-4 border-b border-border">
+            <SheetTitle className="flex items-center gap-2">
+              <Bot className="h-5 w-5 text-primary" />
+              AI Schedule Assistant
+            </SheetTitle>
+            <SheetDescription>
+              {confirmedSlot 
+                ? `Interview confirmed with ${selectedCandidateForSchedule?.student_name || "this candidate"}`
+                : proposedSlots.length > 0
+                  ? `Waiting for ${selectedCandidateForSchedule?.student_name || "candidate"} to confirm`
+                  : `Tell me when you'd like to schedule the interview`
+              }
+            </SheetDescription>
+          </SheetHeader>
+          
+          <ScrollArea className="flex-1 p-6">
+            {/* Show confirmed slot if exists */}
+            {confirmedSlot && (
+              <div className="space-y-4 mb-6">
+                <div className="rounded-lg border-2 border-green-500 bg-green-50 dark:bg-green-950 p-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
+                    <h3 className="text-sm font-semibold text-green-700 dark:text-green-300">Interview Confirmed</h3>
+                  </div>
+                  <div className="space-y-2">
+                    <div>
+                      <p className="text-xs text-muted-foreground">Confirmed Date</p>
+                      <p className="font-medium">
+                        {new Date(confirmedSlot.date).toLocaleDateString('en-US', { 
+                          weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' 
+                        })}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">Confirmed Time</p>
+                      <p className="font-medium">{confirmedSlot.time} (30 minutes)</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">Confirmed At</p>
+                      <p className="text-sm">
+                        {new Date(confirmedSlot.confirmed_at).toLocaleString()}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground text-center">
+                  The candidate has confirmed this interview time
+                </p>
+              </div>
+            )}
+
+            {/* Show proposed slots if waiting for confirmation */}
+            {!confirmedSlot && proposedSlots.length > 0 && (
+              <div className="space-y-4 mb-6">
+                <div className="rounded-lg border border-primary/20 bg-primary/5 p-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Loader2 className="h-4 w-4 text-primary animate-spin" />
+                    <h3 className="text-sm font-semibold text-primary">Waiting for Confirmation</h3>
+                  </div>
+                  <p className="text-sm text-muted-foreground mb-3">
+                    You've proposed {proposedSlots.length} time slot(s). The candidate will select their preferred time.
+                  </p>
+                  <div className="space-y-2">
+                    {proposedSlots.map((slot, index) => (
+                      <div key={index} className="rounded bg-secondary/50 p-2 text-sm">
+                        <strong>{new Date(slot.date).toLocaleDateString('en-US', { 
+                          weekday: 'short', month: 'short', day: 'numeric' 
+                        })}</strong> at {slot.time}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                
+                {aiScheduleResponse && (
+                  <div className="rounded-lg bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 p-4">
+                    <div className="flex items-start gap-3">
+                      <Bot className="h-5 w-5 text-green-600 mt-0.5" />
+                      <p className="text-sm text-green-800 dark:text-green-200">{aiScheduleResponse}</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* AI Chat Interface (only show if no slots proposed yet) */}
+            {!confirmedSlot && proposedSlots.length === 0 && (
+              <div className="space-y-4">
+                <div className="rounded-lg bg-secondary/50 p-4">
+                  <h3 className="text-sm font-medium mb-3 flex items-center gap-2">
+                    <Sparkles className="h-4 w-4 text-primary" />
+                    AI-Powered Scheduling
+                  </h3>
+                  <p className="text-xs text-muted-foreground mb-4">
+                    Simply tell me when you'd like to schedule the interview, and I'll handle the rest!
+                  </p>
+                  
+                  {/* Example prompts */}
+                  <div className="space-y-2 mb-4">
+                    <p className="text-xs font-medium text-muted-foreground">Try saying:</p>
+                    <div className="space-y-1">
+                      <button
+                        onClick={() => setScheduleMessage("Schedule on Monday and Tuesday at 9am")}
+                        className="w-full text-left text-xs bg-white dark:bg-secondary rounded p-2 hover:bg-primary/10 transition-colors"
+                      >
+                        💬 "Schedule on Monday and Tuesday at 9am"
+                      </button>
+                      <button
+                        onClick={() => setScheduleMessage("I want to meet on Wednesday at 2pm and Thursday at 10:30am")}
+                        className="w-full text-left text-xs bg-white dark:bg-secondary rounded p-2 hover:bg-primary/10 transition-colors"
+                      >
+                        💬 "Meet on Wednesday at 2pm and Thursday at 10:30am"
+                      </button>
+                      <button
+                        onClick={() => setScheduleMessage("Next Monday at 3pm and Friday at 11am")}
+                        className="w-full text-left text-xs bg-white dark:bg-secondary rounded p-2 hover:bg-primary/10 transition-colors"
+                      >
+                        💬 "Next Monday at 3pm and Friday at 11am"
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {aiScheduleResponse && (
+                  <div className="rounded-lg bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 p-4">
+                    <div className="flex items-start gap-3">
+                      <Bot className="h-5 w-5 text-green-600 mt-0.5" />
+                      <p className="text-sm text-green-800 dark:text-green-200">{aiScheduleResponse}</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </ScrollArea>
+
+          {/* AI Chat Input (only show if no confirmed slot) */}
+          {!confirmedSlot && (
+            <div className="p-6 pt-4 border-t border-border">
+              <div className="flex gap-2">
+                <Input
+                  placeholder="e.g., 'Schedule on Monday and Tuesday at 9am'"
+                  value={scheduleMessage}
+                  onChange={(e) => setScheduleMessage(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault()
+                      handleAIScheduleInterview()
+                    }
+                  }}
+                  disabled={schedulingInterview || proposedSlots.length > 0}
+                  className="flex-1"
+                />
+                <Button 
+                  onClick={handleAIScheduleInterview} 
+                  disabled={!scheduleMessage.trim() || schedulingInterview || proposedSlots.length > 0}
+                  size="icon"
+                >
+                  {schedulingInterview ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Send className="h-4 w-4" />
+                  )}
+                </Button>
+              </div>
+            </div>
+          )}
         </SheetContent>
       </Sheet>
 

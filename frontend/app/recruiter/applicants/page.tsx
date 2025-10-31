@@ -9,9 +9,9 @@ import { useToast } from "@/hooks/use-toast"
 import { PDFViewerModal } from "@/components/pdf-viewer-modal"
 
 interface Applicant {
-  id: number
-  student_id: number
-  job_id: number
+  id: string  // UUID
+  student_id: string  // UUID
+  job_id: string  // UUID
   status: "pending" | "accepted" | "rejected"
   created_at: string
   cover_letter?: string
@@ -73,7 +73,7 @@ export default function AllApplicantsPage() {
     }
     acc[key].push(applicant)
     return acc
-  }, {} as Record<number, Applicant[]>)
+  }, {} as Record<string, Applicant[]>)
 
   if (loading) {
     return (

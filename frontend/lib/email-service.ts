@@ -428,4 +428,356 @@ export const EmailService = {
       html,
     })
   },
+
+  /**
+   * Send interview invitation with calendar event
+   */
+  sendInterviewInvitation: async (
+    studentEmail: string,
+    studentName: string,
+    recruiterName: string,
+    recruiterEmail: string,
+    jobTitle: string,
+    date: string,
+    time: string
+  ): Promise<boolean> => {
+    try {
+      // Parse date and time to create calendar event
+      const [hours, minutes] = time.split(':')
+      const interviewDate = new Date(date)
+      interviewDate.setHours(parseInt(hours), parseInt(minutes), 0, 0)
+      
+      // Calculate end time (30 minutes later)
+      const endDate = new Date(interviewDate)
+      endDate.setMinutes(endDate.getMinutes() + 30)
+      
+      // Format dates for iCalendar
+      const formatICalDate = (d: Date): string => {
+        return d.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z'
+      }
+      
+      // Create iCalendar event
+      const icalEvent = `BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//HireAI//Interview Scheduler//EN
+CALSCALE:GREGORIAN
+METHOD:REQUEST
+BEGIN:VEVENT
+UID:${Date.now()}-${studentEmail}@hireai.com
+DTSTAMP:${formatICalDate(new Date())}
+DTSTART:${formatICalDate(interviewDate)}
+DTEND:${formatICalDate(endDate)}
+SUMMARY:Interview for ${jobTitle}
+DESCRIPTION:Interview with ${recruiterName} for the ${jobTitle} position
+LOCATION:Online (Link will be shared separately)
+ORGANIZER;CN=${recruiterName}:mailto:${recruiterEmail}
+ATTENDEE;CN=${studentName};RSVP=TRUE:mailto:${studentEmail}
+STATUS:CONFIRMED
+SEQUENCE:0
+END:VEVENT
+END:VCALENDAR`
+
+      const html = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <style>
+            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+            .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+            .header { background-color: #4F46E5; color: white; padding: 20px; text-align: center; border-radius: 5px; }
+            .content { background-color: #f9f9f9; padding: 20px; margin: 20px 0; border-radius: 5px; }
+            .interview-details { background-color: white; padding: 20px; margin: 20px 0; border-left: 4px solid #4F46E5; }
+            .footer { text-align: center; color: #666; font-size: 12px; margin-top: 20px; }
+            .button { display: inline-block; padding: 12px 24px; background-color: #4F46E5; color: white; text-decoration: none; border-radius: 5px; margin: 10px 0; }
+            .highlight { background-color: #FEF3C7; padding: 2px 6px; border-radius: 3px; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h1>📅 Interview Scheduled!</h1>
+            </div>
+            
+            <div class="content">
+              <p>Dear ${studentName},</p>
+              
+              <p>Great news! Your interview for the <strong>${jobTitle}</strong> position has been scheduled.</p>
+              
+              <div class="interview-details">
+                <h3>Interview Details:</h3>
+                <ul>
+                  <li><strong>Position:</strong> ${jobTitle}</li>
+                  <li><strong>Interviewer:</strong> ${recruiterName}</li>
+                  <li><strong>Date:</strong> <span class="highlight">${new Date(date).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</span></li>
+                  <li><strong>Time:</strong> <span class="highlight">${time}</span></li>
+                  <li><strong>Duration:</strong> 30 minutes</li>
+                  <li><strong>Location:</strong> Online (Link will be shared separately)</li>
+                </ul>
+              </div>
+              
+              <p>A calendar event has been attached to this email. Please add it to your calendar to ensure you don't miss the interview.</p>
+              
+              <p><strong>Preparation Tips:</strong></p>
+              <ul>
+                <li>Test your internet connection and audio/video setup beforehand</li>
+                <li>Review the job description and company information</li>
+                <li>Prepare questions you'd like to ask about the role</li>
+                <li>Be ready 5-10 minutes early</li>
+              </ul>
+              
+              <p>If you need to reschedule, please reply to this email at your earliest convenience.</p>
+              
+              <p>Good luck with your interview!</p>
+            </div>
+            
+            <div class="footer">
+              <p>This is an automated message from HireAI Platform</p>
+              <p>For questions, contact: ${recruiterEmail}</p>
+              <p>© ${new Date().getFullYear()} HireAI. All rights reserved.</p>
+            </div>
+          </div>
+        </body>
+        </html>
+      `
+
+      return await EmailService.sendEmail({
+        to: studentEmail,
+        subject: `Interview Scheduled - ${jobTitle}`,
+        html,
+        attachments: [
+          {
+            filename: 'interview.ics',
+            content: Buffer.from(icalEvent),
+            contentType: 'text/calendar',
+          },
+        ],
+      })
+    } catch (error) {
+      console.error("Error sending interview invitation:", error)
+      return false
+    }
+  },
+
+  /**
+   * Send interview slots email with confirmation link
+   */
+  sendInterviewSlotsEmail: async (
+    studentEmail: string,
+    studentName: string,
+    recruiterName: string,
+    recruiterEmail: string,
+    jobTitle: string,
+    slots: Array<{ date: string; time: string }>,
+    confirmationToken: string,
+    applicationId: string
+  ): Promise<boolean> => {
+    try {
+      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+      const confirmationLink = `${baseUrl}/student/confirm-interview/${confirmationToken}`
+
+      const html = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <style>
+            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+            .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+            .header { background-color: #4F46E5; color: white; padding: 20px; text-align: center; border-radius: 5px; }
+            .content { background-color: #f9f9f9; padding: 20px; margin: 20px 0; border-radius: 5px; }
+            .interview-details { background-color: white; padding: 20px; margin: 20px 0; border-left: 4px solid #4F46E5; }
+            .slot { background-color: #f3f4f6; padding: 12px; margin: 8px 0; border-radius: 5px; border-left: 3px solid #4F46E5; }
+            .footer { text-align: center; color: #666; font-size: 12px; margin-top: 20px; }
+            .button { display: inline-block; padding: 14px 28px; background-color: #4F46E5; color: white; text-decoration: none; border-radius: 5px; margin: 15px 0; font-weight: bold; }
+            .highlight { background-color: #FEF3C7; padding: 2px 6px; border-radius: 3px; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h1>📅 Interview Time Selection Required</h1>
+            </div>
+            
+            <div class="content">
+              <p>Dear ${studentName},</p>
+              
+              <p>Great news! <strong>${recruiterName}</strong> would like to schedule an interview with you for the <strong>${jobTitle}</strong> position.</p>
+              
+              <p>Please select your preferred interview time from the available slots below:</p>
+              
+              <div class="interview-details">
+                <h3>Available Time Slots (${slots.length} options):</h3>
+                ${slots.map((slot, index) => `
+                  <div class="slot">
+                    <strong>Option ${index + 1}:</strong> 
+                    ${new Date(slot.date).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })} 
+                    at <span class="highlight">${slot.time}</span> (30 minutes)
+                  </div>
+                `).join('')}
+              </div>
+              
+              <div style="text-align: center; margin: 30px 0;">
+                <a href="${confirmationLink}" class="button">
+                  🗓️ Select Your Preferred Time
+                </a>
+              </div>
+              
+              <p style="font-size: 13px; color: #666;">
+                <strong>Note:</strong> This link will expire in 7 days. Please select your preferred time as soon as possible.
+              </p>
+              
+              <p><strong>What to expect:</strong></p>
+              <ul>
+                <li>Click the button above to view all available times</li>
+                <li>Select your preferred interview slot</li>
+                <li>You'll receive a confirmation email with calendar invitation</li>
+                <li>The recruiter will be notified of your selection</li>
+              </ul>
+              
+              <p>If you have any questions or none of these times work for you, please reply to this email.</p>
+              
+              <p>We look forward to speaking with you!</p>
+            </div>
+            
+            <div class="footer">
+              <p>This is an automated message from HireAI Platform</p>
+              <p>For questions, contact: ${recruiterEmail}</p>
+              <p>© ${new Date().getFullYear()} HireAI. All rights reserved.</p>
+            </div>
+          </div>
+        </body>
+        </html>
+      `
+
+      return await EmailService.sendEmail({
+        to: studentEmail,
+        subject: `Interview Time Selection - ${jobTitle}`,
+        html,
+      })
+    } catch (error) {
+      console.error("Error sending interview slots email:", error)
+      return false
+    }
+  },
+
+  /**
+   * Send interview confirmation to recruiter
+   */
+  sendInterviewConfirmationToRecruiter: async (
+    recruiterEmail: string,
+    recruiterName: string,
+    studentName: string,
+    studentEmail: string,
+    jobTitle: string,
+    confirmedSlot: { date: string; time: string }
+  ): Promise<boolean> => {
+    try {
+      // Parse date and time to create calendar event
+      const [hours, minutes] = confirmedSlot.time.split(':')
+      const interviewDate = new Date(confirmedSlot.date)
+      interviewDate.setHours(parseInt(hours), parseInt(minutes), 0, 0)
+      
+      // Calculate end time (30 minutes later)
+      const endDate = new Date(interviewDate)
+      endDate.setMinutes(endDate.getMinutes() + 30)
+      
+      // Format dates for iCalendar
+      const formatICalDate = (d: Date): string => {
+        return d.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z'
+      }
+      
+      // Create iCalendar event
+      const icalEvent = `BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//HireAI//Interview Scheduler//EN
+CALSCALE:GREGORIAN
+METHOD:REQUEST
+BEGIN:VEVENT
+UID:${Date.now()}-${recruiterEmail}@hireai.com
+DTSTAMP:${formatICalDate(new Date())}
+DTSTART:${formatICalDate(interviewDate)}
+DTEND:${formatICalDate(endDate)}
+SUMMARY:Interview with ${studentName} for ${jobTitle}
+DESCRIPTION:Interview with ${studentName} (${studentEmail}) for the ${jobTitle} position
+LOCATION:Online (Link will be shared separately)
+ORGANIZER;CN=${recruiterName}:mailto:${recruiterEmail}
+ATTENDEE;CN=${studentName};RSVP=TRUE:mailto:${studentEmail}
+STATUS:CONFIRMED
+SEQUENCE:0
+END:VEVENT
+END:VCALENDAR`
+
+      const html = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <style>
+            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+            .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+            .header { background-color: #10B981; color: white; padding: 20px; text-align: center; border-radius: 5px; }
+            .content { background-color: #f9f9f9; padding: 20px; margin: 20px 0; border-radius: 5px; }
+            .interview-details { background-color: white; padding: 20px; margin: 20px 0; border-left: 4px solid #10B981; }
+            .footer { text-align: center; color: #666; font-size: 12px; margin-top: 20px; }
+            .highlight { background-color: #D1FAE5; padding: 2px 6px; border-radius: 3px; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h1>✅ Interview Confirmed!</h1>
+            </div>
+            
+            <div class="content">
+              <p>Dear ${recruiterName},</p>
+              
+              <p><strong>${studentName}</strong> has confirmed their interview time for the <strong>${jobTitle}</strong> position.</p>
+              
+              <div class="interview-details">
+                <h3>Confirmed Interview Details:</h3>
+                <ul>
+                  <li><strong>Candidate:</strong> ${studentName}</li>
+                  <li><strong>Email:</strong> ${studentEmail}</li>
+                  <li><strong>Position:</strong> ${jobTitle}</li>
+                  <li><strong>Date:</strong> <span class="highlight">${new Date(confirmedSlot.date).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</span></li>
+                  <li><strong>Time:</strong> <span class="highlight">${confirmedSlot.time}</span></li>
+                  <li><strong>Duration:</strong> 30 minutes</li>
+                </ul>
+              </div>
+              
+              <p>A calendar event has been attached to this email. Please add it to your calendar.</p>
+              
+              <p><strong>Next Steps:</strong></p>
+              <ul>
+                <li>Add the interview to your calendar</li>
+                <li>Prepare interview questions</li>
+                <li>Send the meeting link (Zoom, Teams, etc.) to ${studentEmail}</li>
+                <li>Review the candidate's application materials</li>
+              </ul>
+            </div>
+            
+            <div class="footer">
+              <p>This is an automated message from HireAI Platform</p>
+              <p>© ${new Date().getFullYear()} HireAI. All rights reserved.</p>
+            </div>
+          </div>
+        </body>
+        </html>
+      `
+
+      return await EmailService.sendEmail({
+        to: recruiterEmail,
+        subject: `Interview Confirmed - ${studentName} - ${jobTitle}`,
+        html,
+        attachments: [
+          {
+            filename: 'interview.ics',
+            content: Buffer.from(icalEvent),
+            contentType: 'text/calendar',
+          },
+        ],
+      })
+    } catch (error) {
+      console.error("Error sending recruiter confirmation:", error)
+      return false
+    }
+  },
 }
