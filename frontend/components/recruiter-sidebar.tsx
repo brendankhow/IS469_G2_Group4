@@ -1,55 +1,68 @@
-"use client"
+"use client";
 
-import Link from "next/link"
-import { usePathname, useRouter } from "next/navigation"
-import { Button } from "@/components/ui/button"
-import { Briefcase, Users, Home, User, Sparkles, LogOut, Search, Calendar } from "lucide-react"
-import { useToast } from "@/hooks/use-toast"
-import { useState } from "react"
+import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
+import { Button } from "@/components/ui/button";
+import {
+  Briefcase,
+  Users,
+  Home,
+  User,
+  Sparkles,
+  LogOut,
+  Search,
+  Calendar,
+} from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { useState } from "react";
 
 export function RecruiterSidebar() {
-  const pathname = usePathname()
-  const router = useRouter()
-  const { toast } = useToast()
-  const [isLoggingOut, setIsLoggingOut] = useState(false)
+  const pathname = usePathname();
+  const router = useRouter();
+  const { toast } = useToast();
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   const handleLogout = async () => {
-    setIsLoggingOut(true)
+    setIsLoggingOut(true);
     try {
       const response = await fetch("/api/auth/logout", {
         method: "POST",
-      })
+      });
 
       if (!response.ok) {
-        throw new Error("Logout failed")
+        throw new Error("Logout failed");
       }
 
       toast({
         title: "Logged out successfully",
         description: "See you next time!",
-      })
+      });
 
-      router.push("/login")
-      router.refresh()
+      router.push("/login");
+      router.refresh();
     } catch (error) {
       toast({
         title: "Logout failed",
         description: "Please try again",
         variant: "destructive",
-      })
+      });
     } finally {
-      setIsLoggingOut(false)
+      setIsLoggingOut(false);
     }
-  }
+  };
 
   const navItems = [
     { href: "/recruiter/dashboard", icon: Briefcase, label: "My Jobs" },
     { href: "/recruiter/post-job", icon: Briefcase, label: "Post Job" },
     { href: "/recruiter/applicants", icon: Users, label: "All Applicants" },
     { href: "/recruiter/headhunting", icon: Search, label: "Headhunting" },
-    { href: "/recruiter/interviews", icon: Calendar, label: "Interviews & Coffee Chats" },
+    {
+      href: "/recruiter/interviews",
+      icon: Calendar,
+      label: "Interviews & Coffee Chats",
+    },
     { href: "/recruiter/profile", icon: User, label: "Profile" },
-  ]
+  ];
 
   return (
     <div className="flex h-screen w-64 flex-col border-r border-border bg-card">
@@ -62,18 +75,20 @@ export function RecruiterSidebar() {
       {/* Navigation */}
       <nav className="flex-1 space-y-1 p-4">
         {navItems.map((item) => {
-          const isActive = pathname === item.href
+          const isActive = pathname === item.href;
           return (
             <Link key={item.href} href={item.href}>
               <Button
                 variant={isActive ? "default" : "ghost"}
-                className={`w-full justify-start ${isActive ? "bg-primary text-primary-foreground" : ""}`}
+                className={`w-full justify-start ${
+                  isActive ? "bg-primary text-primary-foreground" : ""
+                }`}
               >
                 <item.icon className="mr-2 h-4 w-4" />
                 {item.label}
               </Button>
             </Link>
-          )
+          );
         })}
       </nav>
 
@@ -85,9 +100,9 @@ export function RecruiterSidebar() {
             Home
           </Button>
         </Link>
-        <Button 
-          variant="destructive" 
-          className="w-full justify-start" 
+        <Button
+          variant="destructive"
+          className="w-full justify-start"
           onClick={handleLogout}
           disabled={isLoggingOut}
         >
@@ -96,5 +111,5 @@ export function RecruiterSidebar() {
         </Button>
       </div>
     </div>
-  )
+  );
 }

@@ -1,20 +1,23 @@
-import { NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { NextResponse } from "next/server";
+import { createClient } from "@/lib/supabase/server";
 
 export async function GET() {
   try {
-    const supabase = await createClient()
-    
+    const supabase = await createClient();
+
     // Get current user
-    const { data: { user } } = await supabase.auth.getUser()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
     if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     // Fetch all coffee chats for this student
     const { data: coffeeChats, error } = await supabase
-      .from('coffeechat')
-      .select(`
+      .from("coffeechat")
+      .select(
+        `
         id,
         recruiter_id,
         student_id,
@@ -28,30 +31,37 @@ export async function GET() {
           name,
           email
         )
-      `)
-      .eq('student_id', user.id)
-      .order('created_at', { ascending: false })
+      `
+      )
+      .eq("student_id", user.id)
+      .order("created_at", { ascending: false });
 
     if (error) {
-      console.error('Error fetching coffee chats:', error)
-      return NextResponse.json({ error: 'Failed to fetch coffee chats' }, { status: 500 })
+      console.error("Error fetching coffee chats:", error);
+      return NextResponse.json(
+        { error: "Failed to fetch coffee chats" },
+        { status: 500 }
+      );
     }
 
     // Transform the data
     const transformedChats = coffeeChats.map((chat: any) => ({
       id: chat.id,
       recruiter_id: chat.recruiter_id,
-      recruiter_name: chat.profiles?.name || 'Unknown',
-      recruiter_email: chat.profiles?.email || '',
+      recruiter_name: chat.profiles?.name || "Unknown",
+      recruiter_email: chat.profiles?.email || "",
       proposed_slots: chat.proposed_slots || [],
       confirmed_slot: chat.confirmed_slot,
-      coffeechat_status: chat.coffeechat_status || 'pending',
+      coffeechat_status: chat.coffeechat_status || "pending",
       created_at: chat.created_at,
-    }))
+    }));
 
-    return NextResponse.json({ coffeeChats: transformedChats })
+    return NextResponse.json({ coffeeChats: transformedChats });
   } catch (error) {
-    console.error('Error in GET /api/student/coffeechats:', error)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    console.error("Error in GET /api/student/coffeechats:", error);
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 }
+    );
   }
 }
