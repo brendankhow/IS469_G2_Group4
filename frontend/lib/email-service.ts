@@ -831,8 +831,9 @@ END:VCALENDAR`;
     coffeeChatId: string
   ): Promise<boolean> => {
     try {
-      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
-      const confirmationLink = `${baseUrl}/student/confirm-coffeechat/${confirmationToken}`
+      const baseUrl =
+        process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+      const confirmationLink = `${baseUrl}/student/confirm-coffeechat/${confirmationToken}`;
 
       const html = `
         <!DOCTYPE html>
@@ -925,8 +926,8 @@ END:VCALENDAR`;
   ): Promise<boolean> => {
     try {
       // Generate calendar event
-      const startDate = new Date(`${confirmedSlot.date}T${confirmedSlot.time}`)
-      const endDate = new Date(startDate.getTime() + 30 * 60000) // 30 minutes
+      const startDate = new Date(`${confirmedSlot.date}T${confirmedSlot.time}`);
+      const endDate = new Date(startDate.getTime() + 30 * 60000); // 30 minutes
 
       const icalEvent = `BEGIN:VCALENDAR
 VERSION:2.0
@@ -974,7 +975,9 @@ END:VCALENDAR`;
                 <h3>Coffee Chat Details:</h3>
                 <ul>
                   <li><strong>With:</strong> ${recruiterName}</li>
-                  <li><strong>Date:</strong> ${new Date(confirmedSlot.date).toLocaleDateString("en-US", {
+                  <li><strong>Date:</strong> ${new Date(
+                    confirmedSlot.date
+                  ).toLocaleDateString("en-US", {
                     weekday: "long",
                     year: "numeric",
                     month: "long",
@@ -1035,7 +1038,9 @@ END:VCALENDAR`;
                 <ul>
                   <li><strong>Candidate:</strong> ${studentName}</li>
                   <li><strong>Email:</strong> ${studentEmail}</li>
-                  <li><strong>Date:</strong> ${new Date(confirmedSlot.date).toLocaleDateString("en-US", {
+                  <li><strong>Date:</strong> ${new Date(
+                    confirmedSlot.date
+                  ).toLocaleDateString("en-US", {
                     weekday: "long",
                     year: "numeric",
                     month: "long",

@@ -1,5 +1,5 @@
-import { NextRequest, NextResponse } from "next/server"
-import { createAdminClient } from "@/lib/supabase/admin"
+import { NextRequest, NextResponse } from "next/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 /**
  * GET /api/coffeechat/[studentId]/slots
@@ -10,18 +10,18 @@ export async function GET(
   { params }: { params: Promise<{ studentId: string }> }
 ) {
   try {
-    const supabase = createAdminClient()
-    const { studentId } = await params
-    
+    const supabase = createAdminClient();
+    const { studentId } = await params;
+
     // Get recruiter ID from query params (in production, get from session)
-    const { searchParams } = new URL(request.url)
-    const recruiterId = searchParams.get('recruiterId')
-    
+    const { searchParams } = new URL(request.url);
+    const recruiterId = searchParams.get("recruiterId");
+
     if (!recruiterId) {
       return NextResponse.json(
         { error: "Recruiter ID required" },
         { status: 400 }
-      )
+      );
     }
 
     // Fetch active coffee chat
@@ -33,14 +33,15 @@ export async function GET(
       .in("coffeechat_status", ["slots_proposed", "confirmed"])
       .order("created_at", { ascending: false })
       .limit(1)
-      .single()
+      .single();
 
-    if (error && error.code !== "PGRST116") { // PGRST116 = no rows returned
-      console.error("Error fetching coffee chat:", error)
+    if (error && error.code !== "PGRST116") {
+      // PGRST116 = no rows returned
+      console.error("Error fetching coffee chat:", error);
       return NextResponse.json(
         { error: "Failed to fetch coffee chat status" },
         { status: 500 }
-      )
+      );
     }
 
     return NextResponse.json({
@@ -48,12 +49,12 @@ export async function GET(
       confirmedSlot: coffeeChat?.confirmed_slot || null,
       coffeeChatStatus: coffeeChat?.coffeechat_status || "not_scheduled",
       coffeeChatId: coffeeChat?.id || null,
-    })
+    });
   } catch (error) {
-    console.error("Error in GET /api/coffeechat/[studentId]/slots:", error)
+    console.error("Error in GET /api/coffeechat/[studentId]/slots:", error);
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }
-    )
+    );
   }
 }

@@ -187,9 +187,10 @@ export default function ApplicantsPage() {
   const [aiMatchingResults, setAiMatchingResults] = useState<string | null>(
     null
   );
-  
+
   // Recruiter profile state
-  const [recruiterProfile, setRecruiterProfile] = useState<RecruiterProfile | null>(null);
+  const [recruiterProfile, setRecruiterProfile] =
+    useState<RecruiterProfile | null>(null);
 
   const chatScrollRef = useRef<HTMLDivElement>(null);
 
@@ -197,13 +198,13 @@ export default function ApplicantsPage() {
   useEffect(() => {
     const fetchProfile = async () => {
       try {
-        const response = await fetch('/api/auth/me');
+        const response = await fetch("/api/auth/me");
         if (response.ok) {
           const data = await response.json();
           setRecruiterProfile(data.user);
         }
       } catch (error) {
-        console.error('Failed to fetch recruiter profile:', error);
+        console.error("Failed to fetch recruiter profile:", error);
       }
     };
     fetchProfile();
@@ -624,7 +625,7 @@ export default function ApplicantsPage() {
       });
 
       setScheduleMessage(""); // Clear input
-      
+
       // Auto-close the sheet after 10 seconds
       setTimeout(() => {
         setScheduleOpen(false);
