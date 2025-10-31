@@ -70,6 +70,13 @@ interface ApplicantChatHistory {
   };
 }
 
+interface RecruiterProfile {
+  id: string;
+  email: string;
+  name: string | null;
+  role: string;
+}
+
 interface Job {
   id: number;
   title: string;
@@ -180,8 +187,27 @@ export default function ApplicantsPage() {
   const [aiMatchingResults, setAiMatchingResults] = useState<string | null>(
     null
   );
+  
+  // Recruiter profile state
+  const [recruiterProfile, setRecruiterProfile] = useState<RecruiterProfile | null>(null);
 
   const chatScrollRef = useRef<HTMLDivElement>(null);
+
+  // Fetch recruiter profile on mount
+  useEffect(() => {
+    const fetchProfile = async () => {
+      try {
+        const response = await fetch('/api/auth/me');
+        if (response.ok) {
+          const data = await response.json();
+          setRecruiterProfile(data.user);
+        }
+      } catch (error) {
+        console.error('Failed to fetch recruiter profile:', error);
+      }
+    };
+    fetchProfile();
+  }, []);
 
   // Debug: Log when confirmedSlot or proposedSlots change
   useEffect(() => {
@@ -562,9 +588,9 @@ export default function ApplicantsPage() {
       const jobData = await jobResponse.json();
       const jobTitle = jobData.job?.title || "Position";
 
-      // In a real app, you'd get this from the current user session
-      const recruiterName = "Recruiter"; // TODO: Get from session
-      const recruiterEmail = "recruiter@company.com"; // TODO: Get from session
+      // Get recruiter info from profile, fallback to placeholder if not loaded
+      const recruiterName = recruiterProfile?.name || "Recruiter";
+      const recruiterEmail = recruiterProfile?.email || "recruiter@company.com";
 
       const response = await fetch(
         `/api/recruiter/applications/${selectedCandidateForSchedule.id}/ai-schedule-interview`,
@@ -598,6 +624,13 @@ export default function ApplicantsPage() {
       });
 
       setScheduleMessage(""); // Clear input
+      
+      // Auto-close the sheet after 10 seconds
+      setTimeout(() => {
+        setScheduleOpen(false);
+        setScheduleMessage("");
+        setAiScheduleResponse("");
+      }, 10000);
     } catch (error) {
       console.error("AI Scheduling error:", error);
       toast({

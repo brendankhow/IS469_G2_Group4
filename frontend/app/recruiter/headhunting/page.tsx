@@ -6,10 +6,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet"
-import { Loader2, Send, Search, Sparkles, Star, Github, ExternalLink, MessageSquare, Bot, User, X } from "lucide-react"
+import { Loader2, Send, Search, Sparkles, Star, Github, ExternalLink, MessageSquare, Bot, User, X, Coffee, Calendar, Clock, CalendarDays, CheckCircle2 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import ReactMarkdown from "react-markdown"
 import { Badge } from "@/components/ui/badge"
+import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 
 interface CandidateResult {
   name: string
@@ -41,6 +44,13 @@ interface CandidateChatHistory {
     expiresAt: number
     candidateName: string
   }
+}
+
+interface RecruiterProfile {
+  id: string
+  email: string
+  name: string | null
+  role: string
 }
 
 // LocalStorage utilities for chat history with expiry
@@ -132,8 +142,38 @@ export default function HeadhuntingPage() {
   const [currentChatMessage, setCurrentChatMessage] = useState("")
   const [sendingMessage, setSendingMessage] = useState(false)
   
+  // Coffee chat scheduling state
+  const [scheduleChatOpen, setScheduleChatOpen] = useState(false)
+  const [selectedCandidateForSchedule, setSelectedCandidateForSchedule] = useState<CandidateResult | null>(null)
+  const [scheduleMessage, setScheduleMessage] = useState<string>("")
+  const [schedulingCoffeeChat, setSchedulingCoffeeChat] = useState(false)
+  const [schedulingCoffeeChatLoading, setSchedulingCoffeeChatLoading] = useState(false)
+  const [showScheduleCoffeeChat, setShowScheduleCoffeeChat] = useState(false)
+  const [proposedSlots, setProposedSlots] = useState<Array<{ date: string; time: string }>>([])
+  const [confirmedSlot, setConfirmedSlot] = useState<{ date: string; time: string; confirmed_at: string } | null>(null)
+  const [aiScheduleResponse, setAiScheduleResponse] = useState<string>("")
+  
+  // Recruiter profile state
+  const [recruiterProfile, setRecruiterProfile] = useState<RecruiterProfile | null>(null)
+  
   // Ref for chat scroll area
   const chatScrollRef = useRef<HTMLDivElement>(null)
+  
+  // Fetch recruiter profile on mount
+  useEffect(() => {
+    const fetchProfile = async () => {
+      try {
+        const response = await fetch('/api/auth/me')
+        if (response.ok) {
+          const data = await response.json()
+          setRecruiterProfile(data.user)
+        }
+      } catch (error) {
+        console.error('Failed to fetch recruiter profile:', error)
+      }
+    }
+    fetchProfile()
+  }, [])
   
   // Load chat history from localStorage on mount
   useEffect(() => {
@@ -395,6 +435,112 @@ export default function HeadhuntingPage() {
     })
   }
 
+  // Coffee chat scheduling functions
+  const handleOpenScheduleCoffeeChat = async (candidate: CandidateResult) => {
+    if (!candidate.student_id) {
+      toast({
+        title: "Cannot Schedule",
+        description: "Student ID not available for this candidate",
+        variant: "destructive",
+      })
+      return
+    }
+
+    console.log("Opening coffee chat schedule for candidate:", candidate.student_id)
+    setSelectedCandidate(candidate)
+    setScheduleMessage("")
+    setAiScheduleResponse("")
+    
+    // Reset previous state first
+    setProposedSlots([])
+    setConfirmedSlot(null)
+    setSchedulingCoffeeChatLoading(true)
+    
+    // Fetch existing proposed slots and confirmed slot
+    try {
+      // Get recruiter ID from profile
+      const recruiterId = recruiterProfile?.id || "temp-recruiter-id"
+      const response = await fetch(`/api/coffeechat/${candidate.student_id}/slots?recruiterId=${recruiterId}`)
+      console.log("API response status:", response.status)
+      
+      if (response.ok) {
+        const data = await response.json()
+        console.log("✅ Fetched coffee chat slots data:", data)
+        
+        setProposedSlots(data.proposedSlots || [])
+        setConfirmedSlot(data.confirmedSlot || null)
+      } else {
+        console.error("❌ Failed to fetch coffee chat slots:", response.status)
+      }
+    } catch (error) {
+      console.error("❌ Error fetching coffee chat slots:", error)
+    } finally {
+      setSchedulingCoffeeChatLoading(false)
+    }
+    
+    setShowScheduleCoffeeChat(true)
+  }
+
+  const handleAIScheduleCoffeeChat = async () => {
+    if (!selectedCandidate || !scheduleMessage.trim()) return
+    
+    setSchedulingCoffeeChat(true)
+    setAiScheduleResponse("")
+    
+    try {
+      // Get recruiter info from profile, fallback to placeholder if not loaded
+      const recruiterName = recruiterProfile?.name || "Recruiter"
+      const recruiterEmail = recruiterProfile?.email || "recruiter@company.com"
+      const recruiterId = recruiterProfile?.id || "temp-recruiter-id"
+      
+      const response = await fetch(`/api/coffeechat/${selectedCandidate.student_id}/ai-schedule`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          message: scheduleMessage,
+          recruiterName,
+          recruiterEmail,
+          recruiterId,
+        })
+      })
+      
+      const data = await response.json()
+      
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to schedule coffee chat')
+      }
+      
+      // Update UI with the parsed slots
+      setProposedSlots(data.slots)
+      setAiScheduleResponse(data.message)
+      
+      toast({
+        title: "Coffee Chat Slots Scheduled!",
+        description: data.message,
+      })
+      
+      setScheduleMessage("") // Clear input
+      
+      // Auto-close the sheet after 10 seconds
+      setTimeout(() => {
+        setShowScheduleCoffeeChat(false)
+        setScheduleMessage("")
+        setAiScheduleResponse("")
+      }, 10000)
+    } catch (error) {
+      console.error('AI Coffee Chat Scheduling error:', error)
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to schedule coffee chat",
+        variant: "destructive",
+      })
+    } finally {
+      setSchedulingCoffeeChat(false)
+    }
+  }
+
   return (
     <div className="flex h-[calc(100vh-2rem)] overflow-hidden p-2 gap-6">
       {/* Main Chat Area */}
@@ -550,15 +696,26 @@ export default function HeadhuntingPage() {
                                     {/* Links Section */}
                                     <div className="pt-3 border-t-2 space-y-2">
                                       {candidate.student_id && (
-                                        <Button 
-                                          variant="default" 
-                                          size="sm" 
-                                          className="w-full border-2 bg-primary" 
-                                          onClick={() => handleOpenCandidateChat(candidate)}
-                                        >
-                                          <MessageSquare className="h-4 w-4 mr-2" />
-                                          Know More About This Person
-                                        </Button>
+                                        <>
+                                          <Button 
+                                            variant="default" 
+                                            size="sm" 
+                                            className="w-full border-2 bg-primary" 
+                                            onClick={() => handleOpenCandidateChat(candidate)}
+                                          >
+                                            <MessageSquare className="h-4 w-4 mr-2" />
+                                            Know More About This Person
+                                          </Button>
+                                          <Button 
+                                            variant="default" 
+                                            size="sm" 
+                                            className="w-full border-2 bg-green-600 hover:bg-green-700" 
+                                            onClick={() => handleOpenScheduleCoffeeChat(candidate)}
+                                          >
+                                            <Coffee className="h-4 w-4 mr-2" />
+                                            Schedule Coffee Chat
+                                          </Button>
+                                        </>
                                       )}
                                       {candidate.github_link && candidate.github_link !== "N/A" && (
                                         <Button variant="outline" size="sm" className="w-full border-2" asChild>
@@ -836,6 +993,237 @@ export default function HeadhuntingPage() {
               </div>
             </>
           )}
+        </SheetContent>
+      </Sheet>
+
+      {/* Coffee Chat Scheduling Sheet - Matches Interview UI */}
+      <Sheet
+        open={showScheduleCoffeeChat}
+        onOpenChange={(open) => {
+          setShowScheduleCoffeeChat(open)
+          // Clear state when closing
+          if (!open) {
+            setScheduleMessage("")
+            setAiScheduleResponse("")
+            setProposedSlots([])
+            setConfirmedSlot(null)
+          }
+        }}
+      >
+        <SheetContent
+          side="right"
+          className="w-full sm:w-1/3 sm:max-w-none flex flex-col p-0"
+        >
+          <SheetHeader className="p-6 pb-4 border-b border-border">
+            <SheetTitle className="flex items-center gap-2">
+              <Bot className="h-5 w-5 text-primary" />
+              AI Schedule Assistant - Coffee Chat
+            </SheetTitle>
+            <SheetDescription>
+              {confirmedSlot
+                ? `Coffee chat confirmed with ${selectedCandidate?.name || "this candidate"}`
+                : proposedSlots.length > 0
+                ? `Waiting for ${selectedCandidate?.name || "candidate"} to confirm`
+                : `Tell me when you'd like to schedule the coffee chat`}
+            </SheetDescription>
+          </SheetHeader>
+
+          <ScrollArea className="flex-1 p-6">
+            {/* Show confirmed slot if exists */}
+            {confirmedSlot && (
+              <div className="space-y-4 mb-6">
+                <div className="rounded-lg border-2 border-green-500 bg-green-50 dark:bg-green-950 p-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
+                    <h3 className="text-sm font-semibold text-green-700 dark:text-green-300">
+                      Coffee Chat Confirmed
+                    </h3>
+                  </div>
+                  <div className="space-y-2">
+                    <div>
+                      <p className="text-xs text-muted-foreground">
+                        Confirmed Date
+                      </p>
+                      <p className="font-medium">
+                        {new Date(confirmedSlot.date).toLocaleDateString(
+                          "en-US",
+                          {
+                            weekday: "long",
+                            month: "long",
+                            day: "numeric",
+                            year: "numeric",
+                          }
+                        )}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">
+                        Confirmed Time
+                      </p>
+                      <p className="font-medium">
+                        {confirmedSlot.time} (30 minutes)
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">
+                        Confirmed At
+                      </p>
+                      <p className="text-sm">
+                        {new Date(confirmedSlot.confirmed_at).toLocaleString()}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground text-center">
+                  The candidate has confirmed this coffee chat time
+                </p>
+              </div>
+            )}
+
+            {/* Show proposed slots if waiting for confirmation */}
+            {!confirmedSlot && proposedSlots.length > 0 && (
+              <div className="space-y-4 mb-6">
+                <div className="rounded-lg border border-primary/20 bg-primary/5 p-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Loader2 className="h-4 w-4 text-primary animate-spin" />
+                    <h3 className="text-sm font-semibold text-primary">
+                      Waiting for Confirmation
+                    </h3>
+                  </div>
+                  <p className="text-sm text-muted-foreground mb-3">
+                    You've proposed {proposedSlots.length} time slot(s). The
+                    candidate will select their preferred time.
+                  </p>
+                  <div className="space-y-2">
+                    {proposedSlots.map((slot, index) => (
+                      <div
+                        key={index}
+                        className="rounded bg-secondary/50 p-2 text-sm"
+                      >
+                        <strong>
+                          {new Date(slot.date).toLocaleDateString("en-US", {
+                            weekday: "short",
+                            month: "short",
+                            day: "numeric",
+                          })}
+                        </strong>{" "}
+                        at {slot.time}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {aiScheduleResponse && (
+                  <div className="rounded-lg bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 p-4">
+                    <div className="flex items-start gap-3">
+                      <Bot className="h-5 w-5 text-green-600 mt-0.5" />
+                      <p className="text-sm text-green-800 dark:text-green-200">
+                        {aiScheduleResponse}
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* AI Chat Interface (only show if no slots proposed yet) */}
+            {!confirmedSlot && proposedSlots.length === 0 && (
+              <div className="space-y-4">
+                <div className="rounded-lg bg-secondary/50 p-4">
+                  <h3 className="text-sm font-medium mb-3 flex items-center gap-2">
+                    <Sparkles className="h-4 w-4 text-primary" />
+                    AI-Powered Scheduling
+                  </h3>
+                  <p className="text-xs text-muted-foreground mb-4">
+                    Simply tell me when you'd like to schedule the coffee chat,
+                    and I'll handle the rest!
+                  </p>
+
+                  {/* Example prompts */}
+                  <div className="space-y-2 mb-4">
+                    <p className="text-xs font-medium text-muted-foreground">
+                      Try saying:
+                    </p>
+                    <div className="space-y-1">
+                      <button
+                        onClick={() =>
+                          setScheduleMessage(
+                            "Schedule on Monday and Tuesday at 9am"
+                          )
+                        }
+                        className="w-full text-left text-xs bg-white dark:bg-secondary rounded p-2 hover:bg-primary/10 transition-colors"
+                      >
+                        💬 "Schedule on Monday and Tuesday at 9am"
+                      </button>
+                      <button
+                        onClick={() =>
+                          setScheduleMessage(
+                            "Available Wednesday at 2pm and Friday at 10am"
+                          )
+                        }
+                        className="w-full text-left text-xs bg-white dark:bg-secondary rounded p-2 hover:bg-primary/10 transition-colors"
+                      >
+                        💬 "Available Wednesday at 2pm and Friday at 10am"
+                      </button>
+                      <button
+                        onClick={() =>
+                          setScheduleMessage("Next Monday at 3pm")
+                        }
+                        className="w-full text-left text-xs bg-white dark:bg-secondary rounded p-2 hover:bg-primary/10 transition-colors"
+                      >
+                        💬 "Next Monday at 3pm"
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* AI Input */}
+                  <div className="space-y-3">
+                    <Textarea
+                      placeholder="e.g., Schedule on Monday and Tuesday at 9am"
+                      value={scheduleMessage}
+                      onChange={(e) => setScheduleMessage(e.target.value)}
+                      className="min-h-[80px] resize-none"
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && !e.shiftKey) {
+                          e.preventDefault()
+                          handleAIScheduleCoffeeChat()
+                        }
+                      }}
+                    />
+                    <Button
+                      onClick={handleAIScheduleCoffeeChat}
+                      disabled={!scheduleMessage.trim() || schedulingCoffeeChat}
+                      className="w-full"
+                      size="lg"
+                    >
+                      {schedulingCoffeeChat ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Scheduling...
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles className="mr-2 h-4 w-4" />
+                          Schedule Coffee Chat
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                </div>
+
+                {aiScheduleResponse && (
+                  <div className="rounded-lg bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 p-4">
+                    <div className="flex items-start gap-3">
+                      <Bot className="h-5 w-5 text-green-600 mt-0.5" />
+                      <p className="text-sm text-green-800 dark:text-green-200">
+                        {aiScheduleResponse}
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </ScrollArea>
         </SheetContent>
       </Sheet>
     </div>

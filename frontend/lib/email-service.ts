@@ -817,4 +817,286 @@ END:VCALENDAR`;
       return false;
     }
   },
+
+  /**
+   * Send coffee chat slot options to student
+   */
+  sendCoffeeChatSlotsEmail: async (
+    studentEmail: string,
+    studentName: string,
+    recruiterName: string,
+    recruiterEmail: string,
+    slots: Array<{ date: string; time: string }>,
+    confirmationToken: string,
+    coffeeChatId: string
+  ): Promise<boolean> => {
+    try {
+      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+      const confirmationLink = `${baseUrl}/student/confirm-coffeechat/${confirmationToken}`
+
+      const html = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <style>
+            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+            .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+            .header { background-color: #10B981; color: white; padding: 20px; text-align: center; border-radius: 5px; }
+            .content { background-color: #f9f9f9; padding: 20px; margin: 20px 0; border-radius: 5px; }
+            .slot { background-color: #f3f4f6; padding: 12px; margin: 8px 0; border-radius: 5px; border-left: 3px solid #10B981; }
+            .footer { text-align: center; color: #666; font-size: 12px; margin-top: 20px; }
+            .button { display: inline-block; padding: 14px 28px; background-color: #10B981; color: white; text-decoration: none; border-radius: 5px; margin: 15px 0; font-weight: bold; }
+            .highlight { background-color: #D1FAE5; padding: 2px 6px; border-radius: 3px; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h1>☕ Coffee Chat Invitation</h1>
+            </div>
+            
+            <div class="content">
+              <p>Dear ${studentName},</p>
+              
+              <p><strong>${recruiterName}</strong> would like to schedule a coffee chat with you!</p>
+              
+              <p>This is a great opportunity to have an informal conversation and learn more about potential opportunities.</p>
+              
+              <p><strong>Available Time Slots:</strong></p>
+              ${slots
+                .map(
+                  (slot) => `
+                <div class="slot">
+                  <strong>${new Date(slot.date).toLocaleDateString("en-US", {
+                    weekday: "long",
+                    year: "numeric",
+                    month: "long",
+                    day: "numeric",
+                  })}</strong><br>
+                  ${slot.time} (30 minutes)
+                </div>
+              `
+                )
+                .join("")}
+              
+              <p><strong>Next Steps:</strong></p>
+              <ol>
+                <li>Click the button below to select your preferred time</li>
+                <li>Choose the time slot that works best for you</li>
+                <li>You'll receive a calendar invitation with all the details</li>
+              </ol>
+              
+              <div style="text-align: center;">
+                <a href="${confirmationLink}" class="button">Select Your Preferred Time →</a>
+              </div>
+              
+              <p><small><em>This link will expire in 7 days. If you need assistance, please contact ${recruiterEmail}</em></small></p>
+            </div>
+            
+            <div class="footer">
+              <p>This is an automated message from HireAI Platform</p>
+              <p>© ${new Date().getFullYear()} HireAI. All rights reserved.</p>
+            </div>
+          </div>
+        </body>
+        </html>
+      `;
+
+      return await EmailService.sendEmail({
+        to: studentEmail,
+        subject: `☕ Coffee Chat Invitation from ${recruiterName}`,
+        html,
+      });
+    } catch (error) {
+      console.error("Error sending coffee chat slots email:", error);
+      return false;
+    }
+  },
+
+  /**
+   * Send coffee chat confirmation to student and recruiter
+   */
+  sendCoffeeChatConfirmation: async (
+    studentEmail: string,
+    studentName: string,
+    recruiterEmail: string,
+    recruiterName: string,
+    confirmedSlot: { date: string; time: string; confirmed_at: string }
+  ): Promise<boolean> => {
+    try {
+      // Generate calendar event
+      const startDate = new Date(`${confirmedSlot.date}T${confirmedSlot.time}`)
+      const endDate = new Date(startDate.getTime() + 30 * 60000) // 30 minutes
+
+      const icalEvent = `BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//HireAI//Coffee Chat//EN
+BEGIN:VEVENT
+UID:${Date.now()}@hireai.com
+DTSTAMP:${new Date().toISOString().replace(/[-:]/g, "").split(".")[0]}Z
+DTSTART:${startDate.toISOString().replace(/[-:]/g, "").split(".")[0]}Z
+DTEND:${endDate.toISOString().replace(/[-:]/g, "").split(".")[0]}Z
+SUMMARY:☕ Coffee Chat - ${recruiterName} & ${studentName}
+DESCRIPTION:Informal coffee chat conversation
+LOCATION:To be confirmed
+ORGANIZER;CN=${recruiterName}:mailto:${recruiterEmail}
+ATTENDEE;CN=${studentName}:mailto:${studentEmail}
+STATUS:CONFIRMED
+END:VEVENT
+END:VCALENDAR`;
+
+      // Send to student
+      const studentHtml = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <style>
+            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+            .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+            .header { background-color: #10B981; color: white; padding: 20px; text-align: center; border-radius: 5px; }
+            .content { background-color: #f9f9f9; padding: 20px; margin: 20px 0; border-radius: 5px; }
+            .details { background-color: white; padding: 20px; margin: 20px 0; border-left: 4px solid #10B981; }
+            .footer { text-align: center; color: #666; font-size: 12px; margin-top: 20px; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h1>✅ Coffee Chat Confirmed!</h1>
+            </div>
+            
+            <div class="content">
+              <p>Dear ${studentName},</p>
+              
+              <p>Your coffee chat with <strong>${recruiterName}</strong> has been confirmed!</p>
+              
+              <div class="details">
+                <h3>Coffee Chat Details:</h3>
+                <ul>
+                  <li><strong>With:</strong> ${recruiterName}</li>
+                  <li><strong>Date:</strong> ${new Date(confirmedSlot.date).toLocaleDateString("en-US", {
+                    weekday: "long",
+                    year: "numeric",
+                    month: "long",
+                    day: "numeric",
+                  })}</li>
+                  <li><strong>Time:</strong> ${confirmedSlot.time}</li>
+                  <li><strong>Duration:</strong> 30 minutes</li>
+                </ul>
+              </div>
+              
+              <p>A calendar event has been attached to this email. Please add it to your calendar.</p>
+              
+              <p><strong>Tips for the Coffee Chat:</strong></p>
+              <ul>
+                <li>Be yourself and relax - it's an informal conversation</li>
+                <li>Prepare a few questions about the company or role</li>
+                <li>Share your interests and career goals</li>
+                <li>The recruiter will share more details about the meeting location closer to the date</li>
+              </ul>
+            </div>
+            
+            <div class="footer">
+              <p>This is an automated message from HireAI Platform</p>
+              <p>© ${new Date().getFullYear()} HireAI. All rights reserved.</p>
+            </div>
+          </div>
+        </body>
+        </html>
+      `;
+
+      // Send to recruiter
+      const recruiterHtml = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <style>
+            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+            .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+            .header { background-color: #10B981; color: white; padding: 20px; text-align: center; border-radius: 5px; }
+            .content { background-color: #f9f9f9; padding: 20px; margin: 20px 0; border-radius: 5px; }
+            .details { background-color: white; padding: 20px; margin: 20px 0; border-left: 4px solid #10B981; }
+            .footer { text-align: center; color: #666; font-size: 12px; margin-top: 20px; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h1>✅ Coffee Chat Confirmed!</h1>
+            </div>
+            
+            <div class="content">
+              <p>Dear ${recruiterName},</p>
+              
+              <p><strong>${studentName}</strong> has confirmed the coffee chat!</p>
+              
+              <div class="details">
+                <h3>Confirmed Coffee Chat Details:</h3>
+                <ul>
+                  <li><strong>Candidate:</strong> ${studentName}</li>
+                  <li><strong>Email:</strong> ${studentEmail}</li>
+                  <li><strong>Date:</strong> ${new Date(confirmedSlot.date).toLocaleDateString("en-US", {
+                    weekday: "long",
+                    year: "numeric",
+                    month: "long",
+                    day: "numeric",
+                  })}</li>
+                  <li><strong>Time:</strong> ${confirmedSlot.time}</li>
+                  <li><strong>Duration:</strong> 30 minutes</li>
+                </ul>
+              </div>
+              
+              <p>A calendar event has been attached to this email.</p>
+              
+              <p><strong>Next Steps:</strong></p>
+              <ul>
+                <li>Add the coffee chat to your calendar</li>
+                <li>Decide on a location (coffee shop, video call, etc.)</li>
+                <li>Send location details to ${studentEmail}</li>
+                <li>Prepare conversation topics</li>
+              </ul>
+            </div>
+            
+            <div class="footer">
+              <p>This is an automated message from HireAI Platform</p>
+              <p>© ${new Date().getFullYear()} HireAI. All rights reserved.</p>
+            </div>
+          </div>
+        </body>
+        </html>
+      `;
+
+      // Send both emails with calendar attachment
+      const studentEmailSent = await EmailService.sendEmail({
+        to: studentEmail,
+        subject: `✅ Coffee Chat Confirmed with ${recruiterName}`,
+        html: studentHtml,
+        attachments: [
+          {
+            filename: "coffeechat.ics",
+            content: Buffer.from(icalEvent),
+            contentType: "text/calendar",
+          },
+        ],
+      });
+
+      const recruiterEmailSent = await EmailService.sendEmail({
+        to: recruiterEmail,
+        subject: `✅ Coffee Chat Confirmed - ${studentName}`,
+        html: recruiterHtml,
+        attachments: [
+          {
+            filename: "coffeechat.ics",
+            content: Buffer.from(icalEvent),
+            contentType: "text/calendar",
+          },
+        ],
+      });
+
+      return studentEmailSent && recruiterEmailSent;
+    } catch (error) {
+      console.error("Error sending coffee chat confirmation:", error);
+      return false;
+    }
+  },
 };
