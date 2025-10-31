@@ -1,19 +1,19 @@
-import nodemailer from 'nodemailer'
-import { createClient } from '@/lib/supabase/server'
-import { marked } from 'marked'
+import nodemailer from "nodemailer";
+import { createClient } from "@/lib/supabase/server";
+import { marked } from "marked";
 
 interface EmailAttachment {
-  filename: string
-  path?: string
-  content?: Buffer
-  contentType?: string
+  filename: string;
+  path?: string;
+  content?: Buffer;
+  contentType?: string;
 }
 
 interface SendEmailOptions {
-  to: string
-  subject: string
-  html: string
-  attachments?: EmailAttachment[]
+  to: string;
+  subject: string;
+  html: string;
+  attachments?: EmailAttachment[];
 }
 
 /**
@@ -30,12 +30,12 @@ export const EmailService = {
       marked.setOptions({
         breaks: true, // Convert \n to <br>
         gfm: true, // GitHub flavored markdown
-      })
-      
-      return marked.parse(markdown) as string
+      });
+
+      return marked.parse(markdown) as string;
     } catch (error) {
       // Return formatted plain text as fallback
-      return markdown.replace(/\n/g, '<br>')
+      return markdown.replace(/\n/g, "<br>");
     }
   },
 
@@ -46,10 +46,10 @@ export const EmailService = {
    */
   extractStoragePath: (publicUrl: string): string | null => {
     try {
-      const match = publicUrl.match(/\/resumes\/(.+)$/)
-      return match ? match[1] : publicUrl // Return path or full URL as fallback
+      const match = publicUrl.match(/\/resumes\/(.+)$/);
+      return match ? match[1] : publicUrl; // Return path or full URL as fallback
     } catch (error) {
-      return publicUrl // Return original URL as fallback
+      return publicUrl; // Return original URL as fallback
     }
   },
   /**
@@ -57,34 +57,37 @@ export const EmailService = {
    */
   createTransporter: () => {
     // Check if OAuth2 credentials are configured (preferred method)
-    if (process.env.GMAIL_USER && process.env.GMAIL_CLIENT_ID &&
-        process.env.GMAIL_CLIENT_SECRET && process.env.GMAIL_REFRESH_TOKEN) {
-
+    if (
+      process.env.GMAIL_USER &&
+      process.env.GMAIL_CLIENT_ID &&
+      process.env.GMAIL_CLIENT_SECRET &&
+      process.env.GMAIL_REFRESH_TOKEN
+    ) {
       return nodemailer.createTransport({
-        service: 'Gmail',
+        service: "Gmail",
         auth: {
-          type: 'OAuth2',
+          type: "OAuth2",
           user: process.env.GMAIL_USER,
           clientId: process.env.GMAIL_CLIENT_ID,
           clientSecret: process.env.GMAIL_CLIENT_SECRET,
           refreshToken: process.env.GMAIL_REFRESH_TOKEN,
         },
-      })
+      });
     }
 
     // Fallback to App Password method (if OAuth2 not configured)
     if (process.env.GMAIL_USER && process.env.GMAIL_APP_PASSWORD) {
       return nodemailer.createTransport({
-        service: 'Gmail',
+        service: "Gmail",
         auth: {
           user: process.env.GMAIL_USER,
           pass: process.env.GMAIL_APP_PASSWORD,
         },
-      })
+      });
     }
 
     // No credentials configured - mock mode
-    return null
+    return null;
   },
 
   /**
@@ -92,10 +95,10 @@ export const EmailService = {
    */
   sendEmail: async (options: SendEmailOptions): Promise<boolean> => {
     try {
-      const transporter = EmailService.createTransporter()
-      
+      const transporter = EmailService.createTransporter();
+
       if (!transporter) {
-        return true
+        return true;
       }
 
       const mailOptions = {
@@ -104,12 +107,12 @@ export const EmailService = {
         subject: options.subject,
         html: options.html,
         attachments: options.attachments,
-      }
+      };
 
-      await transporter.sendMail(mailOptions)
-      return true
+      await transporter.sendMail(mailOptions);
+      return true;
     } catch (error) {
-      return false
+      return false;
     }
   },
 
@@ -126,29 +129,29 @@ export const EmailService = {
   ): Promise<boolean> => {
     try {
       // Convert markdown cover letter to HTML
-      const coverLetterHtml = EmailService.convertMarkdownToHtml(coverLetter)
-      
+      const coverLetterHtml = EmailService.convertMarkdownToHtml(coverLetter);
+
       // Fetch resume from Supabase if URL provided
-      const attachments: EmailAttachment[] = []
-      
+      const attachments: EmailAttachment[] = [];
+
       if (resumeUrl) {
-        const supabase = await createClient()
-        
+        const supabase = await createClient();
+
         // Extract storage path from public URL
-        const storagePath = EmailService.extractStoragePath(resumeUrl)
-        
+        const storagePath = EmailService.extractStoragePath(resumeUrl);
+
         if (storagePath) {
           const { data: resumeBlob, error } = await supabase.storage
-            .from('resumes')
-            .download(storagePath)
+            .from("resumes")
+            .download(storagePath);
 
           if (!error && resumeBlob) {
-            const buffer = Buffer.from(await resumeBlob.arrayBuffer())
+            const buffer = Buffer.from(await resumeBlob.arrayBuffer());
             attachments.push({
-              filename: 'resume.pdf',
+              filename: "resume.pdf",
               content: buffer,
-              contentType: 'application/pdf',
-            })
+              contentType: "application/pdf",
+            });
           }
         }
       }
@@ -174,7 +177,7 @@ export const EmailService = {
             </div>
             
             <div class="content">
-              <p>Dear ${studentName || 'Applicant'},</p>
+              <p>Dear ${studentName || "Applicant"},</p>
               
               <p>Thank you for applying to <strong>${jobTitle}</strong> at <strong>${companyName}</strong> through HireAI!</p>
               
@@ -184,11 +187,15 @@ export const EmailService = {
               <ul>
                 <li><strong>Position:</strong> ${jobTitle}</li>
                 <li><strong>Company:</strong> ${companyName}</li>
-                <li><strong>Resume:</strong> ${resumeUrl ? 'Attached' : 'Not provided'}</li>
+                <li><strong>Resume:</strong> ${
+                  resumeUrl ? "Attached" : "Not provided"
+                }</li>
                 <li><strong>Submitted:</strong> ${new Date().toLocaleDateString()}</li>
               </ul>
               
-              <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/student/applications" class="button">
+              <a href="${
+                process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
+              }/student/applications" class="button">
                 View Your Applications
               </a>
             </div>
@@ -205,16 +212,16 @@ export const EmailService = {
           </div>
         </body>
         </html>
-      `
+      `;
 
       return await EmailService.sendEmail({
         to: studentEmail,
         subject: `Application Confirmation - ${jobTitle}`,
         html,
         attachments,
-      })
+      });
     } catch (error) {
-      return false
+      return false;
     }
   },
 
@@ -232,29 +239,29 @@ export const EmailService = {
   ): Promise<boolean> => {
     try {
       // Convert markdown cover letter to HTML
-      const coverLetterHtml = EmailService.convertMarkdownToHtml(coverLetter)
-      
+      const coverLetterHtml = EmailService.convertMarkdownToHtml(coverLetter);
+
       // Fetch resume from Supabase if URL provided
-      const attachments: EmailAttachment[] = []
-      
+      const attachments: EmailAttachment[] = [];
+
       if (resumeUrl) {
-        const supabase = await createClient()
-        
+        const supabase = await createClient();
+
         // Extract storage path from public URL
-        const storagePath = EmailService.extractStoragePath(resumeUrl)
-        
+        const storagePath = EmailService.extractStoragePath(resumeUrl);
+
         if (storagePath) {
           const { data: resumeBlob, error } = await supabase.storage
-            .from('resumes')
-            .download(storagePath)
+            .from("resumes")
+            .download(storagePath);
 
           if (!error && resumeBlob) {
-            const buffer = Buffer.from(await resumeBlob.arrayBuffer())
+            const buffer = Buffer.from(await resumeBlob.arrayBuffer());
             attachments.push({
-              filename: `${studentName.replace(/\s+/g, '_')}_resume.pdf`,
+              filename: `${studentName.replace(/\s+/g, "_")}_resume.pdf`,
               content: buffer,
-              contentType: 'application/pdf',
-            })
+              contentType: "application/pdf",
+            });
           }
         }
       }
@@ -281,7 +288,7 @@ export const EmailService = {
             </div>
             
             <div class="content">
-              <p>Dear ${recruiterName || 'Recruiter'},</p>
+              <p>Dear ${recruiterName || "Recruiter"},</p>
               
               <p>You have received a new application for <strong>${jobTitle}</strong>.</p>
               
@@ -290,12 +297,16 @@ export const EmailService = {
                 <ul>
                   <li><strong>Name:</strong> ${studentName}</li>
                   <li><strong>Email:</strong> ${studentEmail}</li>
-                  <li><strong>Resume:</strong> ${resumeUrl ? 'Attached to this email' : 'Not provided'}</li>
+                  <li><strong>Resume:</strong> ${
+                    resumeUrl ? "Attached to this email" : "Not provided"
+                  }</li>
                   <li><strong>Applied:</strong> ${new Date().toLocaleDateString()}</li>
                 </ul>
               </div>
               
-              <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/recruiter/applicants" class="button">
+              <a href="${
+                process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
+              }/recruiter/applicants" class="button">
                 Review Application
               </a>
             </div>
@@ -312,16 +323,16 @@ export const EmailService = {
           </div>
         </body>
         </html>
-      `
+      `;
 
       return await EmailService.sendEmail({
         to: recruiterEmail,
         subject: `New Application: ${studentName} - ${jobTitle}`,
         html,
         attachments,
-      })
+      });
     } catch (error) {
-      return false
+      return false;
     }
   },
 
@@ -329,8 +340,8 @@ export const EmailService = {
    * Send rejection email to student
    */
   sendRejectionEmail: async (
-    to: string, 
-    candidateName: string, 
+    to: string,
+    candidateName: string,
     jobTitle: string
   ): Promise<boolean> => {
     const html = `
@@ -369,21 +380,21 @@ export const EmailService = {
         </div>
       </body>
       </html>
-    `
+    `;
 
     return await EmailService.sendEmail({
       to,
       subject: `Application Update - ${jobTitle}`,
       html,
-    })
+    });
   },
 
   /**
    * Send acceptance email to student
    */
   sendAcceptanceEmail: async (
-    to: string, 
-    candidateName: string, 
+    to: string,
+    candidateName: string,
     jobTitle: string
   ): Promise<boolean> => {
     const html = `
@@ -420,13 +431,13 @@ export const EmailService = {
         </div>
       </body>
       </html>
-    `
+    `;
 
     return await EmailService.sendEmail({
       to,
       subject: `Congratulations! Application Accepted - ${jobTitle}`,
       html,
-    })
+    });
   },
 
   /**
@@ -443,19 +454,19 @@ export const EmailService = {
   ): Promise<boolean> => {
     try {
       // Parse date and time to create calendar event
-      const [hours, minutes] = time.split(':')
-      const interviewDate = new Date(date)
-      interviewDate.setHours(parseInt(hours), parseInt(minutes), 0, 0)
-      
+      const [hours, minutes] = time.split(":");
+      const interviewDate = new Date(date);
+      interviewDate.setHours(parseInt(hours), parseInt(minutes), 0, 0);
+
       // Calculate end time (30 minutes later)
-      const endDate = new Date(interviewDate)
-      endDate.setMinutes(endDate.getMinutes() + 30)
-      
+      const endDate = new Date(interviewDate);
+      endDate.setMinutes(endDate.getMinutes() + 30);
+
       // Format dates for iCalendar
       const formatICalDate = (d: Date): string => {
-        return d.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z'
-      }
-      
+        return d.toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
+      };
+
       // Create iCalendar event
       const icalEvent = `BEGIN:VCALENDAR
 VERSION:2.0
@@ -475,7 +486,7 @@ ATTENDEE;CN=${studentName};RSVP=TRUE:mailto:${studentEmail}
 STATUS:CONFIRMED
 SEQUENCE:0
 END:VEVENT
-END:VCALENDAR`
+END:VCALENDAR`;
 
       const html = `
         <!DOCTYPE html>
@@ -508,7 +519,14 @@ END:VCALENDAR`
                 <ul>
                   <li><strong>Position:</strong> ${jobTitle}</li>
                   <li><strong>Interviewer:</strong> ${recruiterName}</li>
-                  <li><strong>Date:</strong> <span class="highlight">${new Date(date).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</span></li>
+                  <li><strong>Date:</strong> <span class="highlight">${new Date(
+                    date
+                  ).toLocaleDateString("en-US", {
+                    weekday: "long",
+                    year: "numeric",
+                    month: "long",
+                    day: "numeric",
+                  })}</span></li>
                   <li><strong>Time:</strong> <span class="highlight">${time}</span></li>
                   <li><strong>Duration:</strong> 30 minutes</li>
                   <li><strong>Location:</strong> Online (Link will be shared separately)</li>
@@ -538,7 +556,7 @@ END:VCALENDAR`
           </div>
         </body>
         </html>
-      `
+      `;
 
       return await EmailService.sendEmail({
         to: studentEmail,
@@ -546,15 +564,15 @@ END:VCALENDAR`
         html,
         attachments: [
           {
-            filename: 'interview.ics',
+            filename: "interview.ics",
             content: Buffer.from(icalEvent),
-            contentType: 'text/calendar',
+            contentType: "text/calendar",
           },
         ],
-      })
+      });
     } catch (error) {
-      console.error("Error sending interview invitation:", error)
-      return false
+      console.error("Error sending interview invitation:", error);
+      return false;
     }
   },
 
@@ -572,8 +590,9 @@ END:VCALENDAR`
     applicationId: string
   ): Promise<boolean> => {
     try {
-      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
-      const confirmationLink = `${baseUrl}/student/confirm-interview/${confirmationToken}`
+      const baseUrl =
+        process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+      const confirmationLink = `${baseUrl}/student/confirm-interview/${confirmationToken}`;
 
       const html = `
         <!DOCTYPE html>
@@ -606,13 +625,22 @@ END:VCALENDAR`
               
               <div class="interview-details">
                 <h3>Available Time Slots (${slots.length} options):</h3>
-                ${slots.map((slot, index) => `
+                ${slots
+                  .map(
+                    (slot, index) => `
                   <div class="slot">
                     <strong>Option ${index + 1}:</strong> 
-                    ${new Date(slot.date).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })} 
+                    ${new Date(slot.date).toLocaleDateString("en-US", {
+                      weekday: "long",
+                      year: "numeric",
+                      month: "long",
+                      day: "numeric",
+                    })} 
                     at <span class="highlight">${slot.time}</span> (30 minutes)
                   </div>
-                `).join('')}
+                `
+                  )
+                  .join("")}
               </div>
               
               <div style="text-align: center; margin: 30px 0;">
@@ -646,16 +674,16 @@ END:VCALENDAR`
           </div>
         </body>
         </html>
-      `
+      `;
 
       return await EmailService.sendEmail({
         to: studentEmail,
         subject: `Interview Time Selection - ${jobTitle}`,
         html,
-      })
+      });
     } catch (error) {
-      console.error("Error sending interview slots email:", error)
-      return false
+      console.error("Error sending interview slots email:", error);
+      return false;
     }
   },
 
@@ -672,19 +700,19 @@ END:VCALENDAR`
   ): Promise<boolean> => {
     try {
       // Parse date and time to create calendar event
-      const [hours, minutes] = confirmedSlot.time.split(':')
-      const interviewDate = new Date(confirmedSlot.date)
-      interviewDate.setHours(parseInt(hours), parseInt(minutes), 0, 0)
-      
+      const [hours, minutes] = confirmedSlot.time.split(":");
+      const interviewDate = new Date(confirmedSlot.date);
+      interviewDate.setHours(parseInt(hours), parseInt(minutes), 0, 0);
+
       // Calculate end time (30 minutes later)
-      const endDate = new Date(interviewDate)
-      endDate.setMinutes(endDate.getMinutes() + 30)
-      
+      const endDate = new Date(interviewDate);
+      endDate.setMinutes(endDate.getMinutes() + 30);
+
       // Format dates for iCalendar
       const formatICalDate = (d: Date): string => {
-        return d.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z'
-      }
-      
+        return d.toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
+      };
+
       // Create iCalendar event
       const icalEvent = `BEGIN:VCALENDAR
 VERSION:2.0
@@ -704,7 +732,7 @@ ATTENDEE;CN=${studentName};RSVP=TRUE:mailto:${studentEmail}
 STATUS:CONFIRMED
 SEQUENCE:0
 END:VEVENT
-END:VCALENDAR`
+END:VCALENDAR`;
 
       const html = `
         <!DOCTYPE html>
@@ -737,8 +765,17 @@ END:VCALENDAR`
                   <li><strong>Candidate:</strong> ${studentName}</li>
                   <li><strong>Email:</strong> ${studentEmail}</li>
                   <li><strong>Position:</strong> ${jobTitle}</li>
-                  <li><strong>Date:</strong> <span class="highlight">${new Date(confirmedSlot.date).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</span></li>
-                  <li><strong>Time:</strong> <span class="highlight">${confirmedSlot.time}</span></li>
+                  <li><strong>Date:</strong> <span class="highlight">${new Date(
+                    confirmedSlot.date
+                  ).toLocaleDateString("en-US", {
+                    weekday: "long",
+                    year: "numeric",
+                    month: "long",
+                    day: "numeric",
+                  })}</span></li>
+                  <li><strong>Time:</strong> <span class="highlight">${
+                    confirmedSlot.time
+                  }</span></li>
                   <li><strong>Duration:</strong> 30 minutes</li>
                 </ul>
               </div>
@@ -761,7 +798,7 @@ END:VCALENDAR`
           </div>
         </body>
         </html>
-      `
+      `;
 
       return await EmailService.sendEmail({
         to: recruiterEmail,
@@ -769,15 +806,15 @@ END:VCALENDAR`
         html,
         attachments: [
           {
-            filename: 'interview.ics',
+            filename: "interview.ics",
             content: Buffer.from(icalEvent),
-            contentType: 'text/calendar',
+            contentType: "text/calendar",
           },
         ],
-      })
+      });
     } catch (error) {
-      console.error("Error sending recruiter confirmation:", error)
-      return false
+      console.error("Error sending recruiter confirmation:", error);
+      return false;
     }
   },
-}
+};

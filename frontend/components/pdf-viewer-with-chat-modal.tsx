@@ -1,40 +1,45 @@
-import { useState, useEffect, useRef } from "react"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { ScrollArea } from "@/components/ui/scroll-area"
-import { Loader2, Send, Bot, User } from "lucide-react"
-import ReactMarkdown from "react-markdown"
+import { useState, useEffect, useRef } from "react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Loader2, Send, Bot, User } from "lucide-react";
+import ReactMarkdown from "react-markdown";
 
 interface ChatMessage {
-  role: "user" | "assistant"
-  content: string
-  timestamp: Date
+  role: "user" | "assistant";
+  content: string;
+  timestamp: Date;
 }
 
 interface Applicant {
-  id: string  // UUID
-  student_id: string  // UUID
-  student_name?: string
-  student_email?: string
-  student_phone?: string
-  student_skills?: string
-  cover_letter?: string
-  resume_url?: string
-  resume_filename?: string
-  status: "pending" | "accepted" | "rejected"
-  created_at: string
+  id: string; // UUID
+  student_id: string; // UUID
+  student_name?: string;
+  student_email?: string;
+  student_phone?: string;
+  student_skills?: string;
+  cover_letter?: string;
+  resume_url?: string;
+  resume_filename?: string;
+  status: "pending" | "accepted" | "rejected";
+  created_at: string;
 }
 
 interface PDFViewerWithChatModalProps {
-  isOpen: boolean
-  onClose: () => void
-  pdfUrl: string
-  candidate: Applicant
-  title?: string
-  chatMessages: ChatMessage[]
-  onSendMessage: (message: string) => void
-  sendingMessage: boolean
+  isOpen: boolean;
+  onClose: () => void;
+  pdfUrl: string;
+  candidate: Applicant;
+  title?: string;
+  chatMessages: ChatMessage[];
+  onSendMessage: (message: string) => void;
+  sendingMessage: boolean;
 }
 
 export function PDFViewerWithChatModal({
@@ -47,44 +52,46 @@ export function PDFViewerWithChatModal({
   onSendMessage,
   sendingMessage,
 }: PDFViewerWithChatModalProps) {
-  const [currentMessage, setCurrentMessage] = useState("")
-  const [mounted, setMounted] = useState(false)
-  const scrollAreaRef = useRef<HTMLDivElement>(null)
+  const [currentMessage, setCurrentMessage] = useState("");
+  const [mounted, setMounted] = useState(false);
+  const scrollAreaRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    console.log('[PDF Viewer Chat Modal] Component mounted')
-    console.log('[PDF Viewer Chat Modal] isOpen:', isOpen)
-    console.log('[PDF Viewer Chat Modal] pdfUrl:', pdfUrl)
-    console.log('[PDF Viewer Chat Modal] candidate:', candidate)
-    
-    setMounted(true)
-  }, [])
+    console.log("[PDF Viewer Chat Modal] Component mounted");
+    console.log("[PDF Viewer Chat Modal] isOpen:", isOpen);
+    console.log("[PDF Viewer Chat Modal] pdfUrl:", pdfUrl);
+    console.log("[PDF Viewer Chat Modal] candidate:", candidate);
+
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     if (isOpen) {
-      console.log('[PDF Viewer Chat Modal] Modal opened with URL:', pdfUrl)
+      console.log("[PDF Viewer Chat Modal] Modal opened with URL:", pdfUrl);
     }
-  }, [isOpen, pdfUrl])
+  }, [isOpen, pdfUrl]);
 
   useEffect(() => {
     if (scrollAreaRef.current) {
-      const scrollContainer = scrollAreaRef.current.querySelector('[data-radix-scroll-area-viewport]')
+      const scrollContainer = scrollAreaRef.current.querySelector(
+        "[data-radix-scroll-area-viewport]"
+      );
       if (scrollContainer) {
-        scrollContainer.scrollTop = scrollContainer.scrollHeight
+        scrollContainer.scrollTop = scrollContainer.scrollHeight;
       }
     }
-  }, [chatMessages, sendingMessage])
+  }, [chatMessages, sendingMessage]);
 
   function handleSend() {
     if (currentMessage.trim() && !sendingMessage) {
-      console.log('[PDF Viewer Chat Modal] Sending message:', currentMessage)
-      onSendMessage(currentMessage)
-      setCurrentMessage("")
+      console.log("[PDF Viewer Chat Modal] Sending message:", currentMessage);
+      onSendMessage(currentMessage);
+      setCurrentMessage("");
     }
   }
 
   if (!mounted) {
-    return null
+    return null;
   }
 
   return (
@@ -102,8 +109,17 @@ export function PDFViewerWithChatModal({
                 src={pdfUrl}
                 className="w-full h-full border-0 rounded-lg"
                 title="PDF Viewer"
-                onLoad={() => console.log('[PDF Viewer Chat Modal] PDF iframe loaded successfully')}
-                onError={(e) => console.error('[PDF Viewer Chat Modal] Error loading PDF in iframe:', e)}
+                onLoad={() =>
+                  console.log(
+                    "[PDF Viewer Chat Modal] PDF iframe loaded successfully"
+                  )
+                }
+                onError={(e) =>
+                  console.error(
+                    "[PDF Viewer Chat Modal] Error loading PDF in iframe:",
+                    e
+                  )
+                }
               />
             </div>
           </div>
@@ -115,7 +131,9 @@ export function PDFViewerWithChatModal({
                 <Bot className="h-4 w-4 text-primary" />
                 AI Assistant
               </h3>
-              <p className="text-xs text-muted-foreground mt-1">Ask about this resume</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                Ask about this resume
+              </p>
             </div>
 
             <div className="flex-1 overflow-hidden" ref={scrollAreaRef}>
@@ -124,7 +142,11 @@ export function PDFViewerWithChatModal({
                   {chatMessages.map((message, index) => (
                     <div
                       key={index}
-                      className={`flex gap-3 ${message.role === "user" ? "justify-end" : "justify-start"}`}
+                      className={`flex gap-3 ${
+                        message.role === "user"
+                          ? "justify-end"
+                          : "justify-start"
+                      }`}
                     >
                       {message.role === "assistant" && (
                         <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
@@ -142,27 +164,74 @@ export function PDFViewerWithChatModal({
                           <div className="text-sm prose prose-sm dark:prose-invert max-w-none">
                             <ReactMarkdown
                               components={{
-                                p: ({ children }) => <p className="mb-3 last:mb-0 leading-relaxed">{children}</p>,
-                                ul: ({ children }) => <ul className="my-3 ml-4 list-disc space-y-2">{children}</ul>,
-                                ol: ({ children }) => <ol className="my-3 ml-4 list-decimal space-y-2">{children}</ol>,
-                                li: ({ children }) => <li className="leading-relaxed">{children}</li>,
-                                strong: ({ children }) => <strong className="font-semibold text-primary">{children}</strong>,
-                                em: ({ children }) => <em className="italic">{children}</em>,
-                                code: ({ children }) => <code className="bg-muted px-1.5 py-0.5 rounded text-xs font-mono">{children}</code>,
-                                h1: ({ children }) => <h1 className="text-lg font-bold mb-2 mt-4 first:mt-0">{children}</h1>,
-                                h2: ({ children }) => <h2 className="text-base font-bold mb-2 mt-3 first:mt-0">{children}</h2>,
-                                h3: ({ children }) => <h3 className="text-sm font-bold mb-2 mt-3 first:mt-0">{children}</h3>,
-                                blockquote: ({ children }) => <blockquote className="border-l-2 border-primary pl-3 my-3 italic">{children}</blockquote>,
+                                p: ({ children }) => (
+                                  <p className="mb-3 last:mb-0 leading-relaxed">
+                                    {children}
+                                  </p>
+                                ),
+                                ul: ({ children }) => (
+                                  <ul className="my-3 ml-4 list-disc space-y-2">
+                                    {children}
+                                  </ul>
+                                ),
+                                ol: ({ children }) => (
+                                  <ol className="my-3 ml-4 list-decimal space-y-2">
+                                    {children}
+                                  </ol>
+                                ),
+                                li: ({ children }) => (
+                                  <li className="leading-relaxed">
+                                    {children}
+                                  </li>
+                                ),
+                                strong: ({ children }) => (
+                                  <strong className="font-semibold text-primary">
+                                    {children}
+                                  </strong>
+                                ),
+                                em: ({ children }) => (
+                                  <em className="italic">{children}</em>
+                                ),
+                                code: ({ children }) => (
+                                  <code className="bg-muted px-1.5 py-0.5 rounded text-xs font-mono">
+                                    {children}
+                                  </code>
+                                ),
+                                h1: ({ children }) => (
+                                  <h1 className="text-lg font-bold mb-2 mt-4 first:mt-0">
+                                    {children}
+                                  </h1>
+                                ),
+                                h2: ({ children }) => (
+                                  <h2 className="text-base font-bold mb-2 mt-3 first:mt-0">
+                                    {children}
+                                  </h2>
+                                ),
+                                h3: ({ children }) => (
+                                  <h3 className="text-sm font-bold mb-2 mt-3 first:mt-0">
+                                    {children}
+                                  </h3>
+                                ),
+                                blockquote: ({ children }) => (
+                                  <blockquote className="border-l-2 border-primary pl-3 my-3 italic">
+                                    {children}
+                                  </blockquote>
+                                ),
                               }}
                             >
                               {message.content}
                             </ReactMarkdown>
                           </div>
                         ) : (
-                          <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                          <p className="text-sm whitespace-pre-wrap">
+                            {message.content}
+                          </p>
                         )}
                         <p className="text-xs mt-1 opacity-70">
-                          {message.timestamp.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                          {message.timestamp.toLocaleTimeString([], {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
                         </p>
                       </div>
                       {message.role === "user" && (
@@ -194,14 +263,18 @@ export function PDFViewerWithChatModal({
                   onChange={(e) => setCurrentMessage(e.target.value)}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" && !e.shiftKey) {
-                      e.preventDefault()
-                      handleSend()
+                      e.preventDefault();
+                      handleSend();
                     }
                   }}
                   disabled={sendingMessage}
                   className="flex-1"
                 />
-                <Button onClick={handleSend} disabled={!currentMessage.trim() || sendingMessage} size="icon">
+                <Button
+                  onClick={handleSend}
+                  disabled={!currentMessage.trim() || sendingMessage}
+                  size="icon"
+                >
                   <Send className="h-4 w-4" />
                 </Button>
               </div>
@@ -210,5 +283,5 @@ export function PDFViewerWithChatModal({
         </div>
       </DialogContent>
     </Dialog>
-  )
+  );
 }

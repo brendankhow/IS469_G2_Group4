@@ -1,109 +1,122 @@
-"use client"
+"use client";
 
-import { useState, useEffect } from "react"
-import { useParams, useRouter } from "next/navigation"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Loader2, Calendar, Check, AlertCircle, Clock } from "lucide-react"
-import { useToast } from "@/hooks/use-toast"
+import { useState, useEffect } from "react";
+import { useParams, useRouter } from "next/navigation";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Loader2, Calendar, Check, AlertCircle, Clock } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 
 interface InterviewSlot {
-  date: string
-  time: string
+  date: string;
+  time: string;
 }
 
 interface ConfirmationData {
-  studentName: string
-  recruiterName: string
-  jobTitle: string
-  slots: InterviewSlot[]
-  confirmedSlot: { date: string; time: string; confirmed_at: string } | null
-  isExpired: boolean
-  isValid: boolean
+  studentName: string;
+  recruiterName: string;
+  jobTitle: string;
+  slots: InterviewSlot[];
+  confirmedSlot: { date: string; time: string; confirmed_at: string } | null;
+  isExpired: boolean;
+  isValid: boolean;
 }
 
 export default function ConfirmInterviewPage() {
-  const params = useParams()
-  const router = useRouter()
-  const { toast } = useToast()
-  const [loading, setLoading] = useState(true)
-  const [confirming, setConfirming] = useState(false)
-  const [data, setData] = useState<ConfirmationData | null>(null)
-  const [selectedSlot, setSelectedSlot] = useState<InterviewSlot | null>(null)
-  const token = params.token as string
+  const params = useParams();
+  const router = useRouter();
+  const { toast } = useToast();
+  const [loading, setLoading] = useState(true);
+  const [confirming, setConfirming] = useState(false);
+  const [data, setData] = useState<ConfirmationData | null>(null);
+  const [selectedSlot, setSelectedSlot] = useState<InterviewSlot | null>(null);
+  const token = params.token as string;
 
   useEffect(() => {
-    fetchConfirmationData()
-  }, [token])
+    fetchConfirmationData();
+  }, [token]);
 
   const fetchConfirmationData = async () => {
     try {
-      const response = await fetch(`/api/student/confirm-interview/${token}`)
-      const result = await response.json()
+      const response = await fetch(`/api/student/confirm-interview/${token}`);
+      const result = await response.json();
 
       if (!response.ok) {
-        throw new Error(result.error || 'Failed to load confirmation data')
+        throw new Error(result.error || "Failed to load confirmation data");
       }
 
-      setData(result)
+      setData(result);
     } catch (error) {
       toast({
         title: "Error",
-        description: error instanceof Error ? error.message : "Failed to load interview details",
+        description:
+          error instanceof Error
+            ? error.message
+            : "Failed to load interview details",
         variant: "destructive",
-      })
+      });
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   const handleConfirmSlot = async () => {
-    if (!selectedSlot) return
+    if (!selectedSlot) return;
 
-    setConfirming(true)
+    setConfirming(true);
     try {
       const response = await fetch(`/api/student/confirm-interview/${token}`, {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
         body: JSON.stringify({
           selectedSlot,
-        })
-      })
+        }),
+      });
 
-      const result = await response.json()
+      const result = await response.json();
 
       if (!response.ok) {
-        throw new Error(result.error || 'Failed to confirm interview')
+        throw new Error(result.error || "Failed to confirm interview");
       }
 
       toast({
         title: "Interview Scheduled!",
-        description: "A confirmation email has been sent to you with calendar invitation.",
+        description:
+          "A confirmation email has been sent to you with calendar invitation.",
         duration: 5000,
-      })
+      });
 
       // Wait a moment to show the toast, then redirect
       setTimeout(() => {
-        router.push('/student/dashboard')
-      }, 2000)
+        router.push("/student/dashboard");
+      }, 2000);
     } catch (error) {
       toast({
         title: "Error",
-        description: error instanceof Error ? error.message : "Failed to confirm interview",
+        description:
+          error instanceof Error
+            ? error.message
+            : "Failed to confirm interview",
         variant: "destructive",
-      })
-      setConfirming(false)
+      });
+      setConfirming(false);
     }
-  }
+  };
 
   if (loading) {
     return (
       <div className="flex h-screen items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
-    )
+    );
   }
 
   if (!data || !data.isValid) {
@@ -123,13 +136,16 @@ export default function ConfirmInterviewPage() {
             <p className="text-sm text-muted-foreground mb-4">
               Please contact the recruiter if you need a new invitation.
             </p>
-            <Button onClick={() => router.push('/student/applications')} className="w-full">
+            <Button
+              onClick={() => router.push("/student/applications")}
+              className="w-full"
+            >
               Go to Applications
             </Button>
           </CardContent>
         </Card>
       </div>
-    )
+    );
   }
 
   if (data.confirmedSlot) {
@@ -156,14 +172,19 @@ export default function ConfirmInterviewPage() {
                 <p className="font-semibold">{data.recruiterName}</p>
               </div>
               <div className="border-t pt-3">
-                <p className="text-xs text-muted-foreground">Interview Date & Time</p>
+                <p className="text-xs text-muted-foreground">
+                  Interview Date & Time
+                </p>
                 <p className="font-semibold text-lg">
-                  {new Date(data.confirmedSlot.date).toLocaleDateString('en-US', {
-                    weekday: 'long',
-                    year: 'numeric',
-                    month: 'long',
-                    day: 'numeric'
-                  })}
+                  {new Date(data.confirmedSlot.date).toLocaleDateString(
+                    "en-US",
+                    {
+                      weekday: "long",
+                      year: "numeric",
+                      month: "long",
+                      day: "numeric",
+                    }
+                  )}
                 </p>
                 <p className="font-semibold text-lg">
                   {data.confirmedSlot.time} (30 minutes)
@@ -176,7 +197,7 @@ export default function ConfirmInterviewPage() {
                 </p>
               </div>
             </div>
-            
+
             <div className="rounded-lg bg-secondary p-4">
               <p className="text-sm">
                 <strong>📧 Next Steps:</strong>
@@ -189,13 +210,16 @@ export default function ConfirmInterviewPage() {
               </ul>
             </div>
 
-            <Button onClick={() => router.push('/student/applications')} className="w-full">
+            <Button
+              onClick={() => router.push("/student/applications")}
+              className="w-full"
+            >
               View Your Applications
             </Button>
           </CardContent>
         </Card>
       </div>
-    )
+    );
   }
 
   return (
@@ -235,9 +259,11 @@ export default function ConfirmInterviewPage() {
             </h3>
             <div className="grid gap-3">
               {data.slots.map((slot, index) => {
-                const isSelected = selectedSlot?.date === slot.date && selectedSlot?.time === slot.time
-                const slotDate = new Date(slot.date)
-                
+                const isSelected =
+                  selectedSlot?.date === slot.date &&
+                  selectedSlot?.time === slot.time;
+                const slotDate = new Date(slot.date);
+
                 return (
                   <Button
                     key={index}
@@ -246,28 +272,41 @@ export default function ConfirmInterviewPage() {
                     onClick={() => setSelectedSlot(slot)}
                   >
                     <div className="flex items-center gap-2 w-full">
-                      {isSelected && <Check className="h-4 w-4 flex-shrink-0" />}
+                      {isSelected && (
+                        <Check className="h-4 w-4 flex-shrink-0" />
+                      )}
                       <div className="flex-1 text-left">
                         <div className="font-semibold">
-                          {slotDate.toLocaleDateString('en-US', {
-                            weekday: 'long',
-                            year: 'numeric',
-                            month: 'long',
-                            day: 'numeric'
+                          {slotDate.toLocaleDateString("en-US", {
+                            weekday: "long",
+                            year: "numeric",
+                            month: "long",
+                            day: "numeric",
                           })}
                         </div>
-                        <div className={`text-sm ${isSelected ? 'opacity-90' : 'opacity-70'}`}>
-                          {slot.time} - {(() => {
-                            const [hours, minutes] = slot.time.split(':')
-                            const endDate = new Date()
-                            endDate.setHours(parseInt(hours), parseInt(minutes) + 30, 0, 0)
-                            return endDate.toTimeString().slice(0, 5)
-                          })()} (30 minutes)
+                        <div
+                          className={`text-sm ${
+                            isSelected ? "opacity-90" : "opacity-70"
+                          }`}
+                        >
+                          {slot.time} -{" "}
+                          {(() => {
+                            const [hours, minutes] = slot.time.split(":");
+                            const endDate = new Date();
+                            endDate.setHours(
+                              parseInt(hours),
+                              parseInt(minutes) + 30,
+                              0,
+                              0
+                            );
+                            return endDate.toTimeString().slice(0, 5);
+                          })()}{" "}
+                          (30 minutes)
                         </div>
                       </div>
                     </div>
                   </Button>
-                )
+                );
               })}
             </div>
           </div>
@@ -279,12 +318,13 @@ export default function ConfirmInterviewPage() {
                 Selected Time:
               </p>
               <p className="text-sm">
-                {new Date(selectedSlot.date).toLocaleDateString('en-US', {
-                  weekday: 'long',
-                  year: 'numeric',
-                  month: 'long',
-                  day: 'numeric'
-                })} at {selectedSlot.time}
+                {new Date(selectedSlot.date).toLocaleDateString("en-US", {
+                  weekday: "long",
+                  year: "numeric",
+                  month: "long",
+                  day: "numeric",
+                })}{" "}
+                at {selectedSlot.time}
               </p>
             </div>
           )}
@@ -309,11 +349,11 @@ export default function ConfirmInterviewPage() {
           </Button>
 
           <p className="text-xs text-muted-foreground text-center">
-            By confirming, you agree to attend the interview at the selected time.
-            You'll receive a calendar invitation via email.
+            By confirming, you agree to attend the interview at the selected
+            time. You'll receive a calendar invitation via email.
           </p>
         </CardContent>
       </Card>
     </div>
-  )
+  );
 }
