@@ -111,12 +111,19 @@ async def agentic_chat(request: AgenticChatRequest):
             github_username = c.get("github_username", "N/A")
             github_link = f"https://github.com/{github_username}" if github_username != "N/A" else "N/A"
             
-            # Format notable projects
+            # Format notable projects (deduplicate using set)
             notable_projects = []
-            for proj in c.get("github_projects", [])[:3]:
-                notable_projects.append(
-                    f"{proj.get('repo_name', 'Unknown')} ({proj.get('language', 'N/A')}) - {proj.get('stars', 0)}⭐"
-                )
+            seen_projects = set()
+            for proj in c.get("github_projects", []):
+                repo_name = proj.get('repo_name', 'Unknown')
+                # Use repo_name as unique identifier to avoid duplicates
+                if repo_name not in seen_projects and repo_name != 'Unknown':
+                    seen_projects.add(repo_name)
+                    notable_projects.append(
+                        f"{repo_name} ({proj.get('language', 'N/A')}) - {proj.get('stars', 0)}⭐"
+                    )
+                    if len(notable_projects) >= 3:  # Limit to top 3
+                        break
             
             # Format personality insight
             personality_insight = ""

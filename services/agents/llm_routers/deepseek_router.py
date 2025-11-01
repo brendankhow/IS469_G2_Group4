@@ -101,6 +101,11 @@ class DeepSeekRouter(BaseLLMRouter):
                 f"Resume Match: {c.get('resume_similarity', 0):.2%}"
             ]
             
+            # Add resume text if available
+            if c.get('resume_text'):
+                candidate_info.append(f"\n📄 Resume Summary:")
+                candidate_info.append(f"{c.get('resume_text', '')}") 
+            
             # Add GitHub projects if available
             if c.get('github_projects'):
                 candidate_info.append("\n🔍 Top Projects:")
@@ -120,14 +125,21 @@ class DeepSeekRouter(BaseLLMRouter):
         
         SYSTEM_PROMPT = """You are a professional recruiter. Rank candidates and provide detailed evaluations.
 
-For each candidate provide:
-1. Fit score (0-10)
-2. 3 evaluation bullets with specific evidence
-3. Notable GitHub projects
-4. Next step (Interview/Phone Screen/Reject)
-5. Personality insight (if data available)
+            For each candidate provide:
+            1. Fit score (0-10)
+            2. 3 evaluation bullets with specific evidence
+            3. Notable GitHub projects
+            4. Next step (Interview/Phone Screen/Reject)
+            5. Personality insight (if data available)
 
-Return ONLY valid JSON array."""
+            **Scoring Guidelines:**
+            - 9-10: Perfect match with strong portfolio evidence and technical depth
+            - 7-8: Strong match with good portfolio or excellent resume alone
+            - 5-6: Moderate match, some relevant experience
+            - 3-4: Weak match, minimal relevant experience
+            - 0-2: Poor match, not suitable
+
+        Return ONLY valid JSON array."""
 
         USER_PROMPT = f"""Candidates:\n\n{rag_context}\n\nJob Requirements: {query}"""
         
