@@ -82,39 +82,53 @@ class CustomRAGService:
 
             # --- Combine rerank results ---
             ranked_entries = []
-            for i, r in enumerate(response.results):
-                entry = id_map[i]
-                score = r.relevance_score
-                if entry["type"] == "resume":
-                    record = next((res for res in retrieved_resumes if res["student_id"] == entry["student_id"]), None)
-                else:
-                    record = next((git for git in retrieved_githubs if git["student_id"] == entry["student_id"]), None)
-                if record:
-                    ranked_entries.append({
-                        "student_id": entry["student_id"],
-                        "type": entry["type"],
-                        "text": record["resume_text"] if entry["type"] == "resume" else record["chunk_text"],
-                        "rerank_score": score
-                    })
+            
+            # *** THIS IS THE FIX ***
+            for r in response.results:
+                original_index = r.index
+                original_doc = id_map[original_index] # Get the original doc using the correct index
+                
+                ranked_entries.append({
+                    "student_id": original_doc.get("student_id"),
+                    "type": original_doc.get("type"),
+                    "rerank_score": r.relevance_score
+                    # We don't need the text anymore, just the score and ID
+                })
 
-            # --- Merge resume + github per student ---
+            # --- Merge scores per student (Your Requested Logic) ---
             merged_candidates = {}
             for item in ranked_entries:
                 sid = item["student_id"]
+                if not sid: continue
+
                 if sid not in merged_candidates:
+                    # New candidate. We need their name and full resume text.
+                    # Let's find their original full resume record
+                    full_resume_record = next((res for res in retrieved_resumes if res.get("student_id") == sid), None)
+                    
+                    student_name = "N/A"
+                    resume_text = None
+
+                    if full_resume_record:
+                        student_name = full_resume_record.get("student_name", "N/A")
+                        resume_text = full_resume_record.get("resume_text")
+                    else:
+                        # If they only had a GitHub match, try to get name from there
+                        github_record = next((git for git in retrieved_githubs if git.get("student_id") == sid), None)
+                        if github_record:
+                            student_name = github_record.get("student_name", "N/A")
+
                     merged_candidates[sid] = {
                         "student_id": sid,
-                        "resume": None,
-                        "github": None,
-                        "combined_score": 0.0
+                        "student_name": student_name,
+                        "resume_text": resume_text, # This is the resume info you wanted
+                        "combined_score": 0.0,
+                        # "relevant_chunks_count": 0 # Optional
                     }
 
-                if item["type"] == "resume":
-                    merged_candidates[sid]["resume"] = item
-                else:
-                    merged_candidates[sid]["github"] = item
-
+                # Add the score (from either resume or github) to the total
                 merged_candidates[sid]["combined_score"] += item["rerank_score"]
+                # merged_candidates[sid]["relevant_chunks_count"] += 1
 
             # --- Rank by combined score ---
             ranked_candidates = sorted(
