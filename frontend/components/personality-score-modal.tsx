@@ -120,14 +120,15 @@ export function PersonalityScoreModal({
         raw_score: analysis.openness,
         description: getDescription("Openness", analysis.openness),
         level: getLevel(analysis.openness),
-      },
-      {
-        trait: "Interview Score",
-        score: analysis.interview_score * 100,
-        raw_score: analysis.interview_score,
-        description: getDescription("Interview Score", analysis.interview_score),
-        level: getLevel(analysis.interview_score),
-      },
+      }
+      // ,
+      // {
+      //   trait: "Interview Score",
+      //   score: analysis.interview_score * 100,
+      //   raw_score: analysis.interview_score,
+      //   description: getDescription("Interview Score", analysis.interview_score),
+      //   level: getLevel(analysis.interview_score),
+      // },
     ]
   }
 
@@ -164,12 +165,13 @@ export function PersonalityScoreModal({
         low: "Practical and results-focused, values proven methods",
         medium: "Open to new ideas within structured frameworks",
         high: "Creative and innovative, embraces new technologies and approaches",
-      },
-      "Interview Score": {
-        low: "May benefit from interview coaching and practice",
-        medium: "Solid interview performance with clear communication",
-        high: "Excellent presentation skills and professional demeanor",
-      },
+      }
+      // ,
+      // "Interview Score": {
+      //   low: "May benefit from interview coaching and practice",
+      //   medium: "Solid interview performance with clear communication",
+      //   high: "Excellent presentation skills and professional demeanor",
+      // },
     }
 
     return descriptions[trait]?.[level] || ""
