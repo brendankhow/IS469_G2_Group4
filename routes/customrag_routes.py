@@ -24,7 +24,7 @@ async def query_candidates_customrag(request: CustomRAGQueryRequest):
         return {
             "success": True,
             "query": request.query,
-            "ranking_method": "custom_rag_max_similarity",
+            "ranking_method": "custom_rag_combine_score",
             "results": results
         }
     except Exception as e:
