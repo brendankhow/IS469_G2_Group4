@@ -26,8 +26,8 @@ agentic_orchestrator = AgenticRecruitmentOrchestrator(llm_router=deepseek_router
 
 class AgenticChatRequest(BaseModel):
     message: str = "I'm looking for a software engineer with experience in frontend tech like typescript and javascript."
-    min_candidates: int = 3
-    min_fit_score: float = 7.0
+    min_candidates: int = 1
+    min_fit_score: float = 0.0
     max_iterations: int = 5
     temperature: float = 0.7
 

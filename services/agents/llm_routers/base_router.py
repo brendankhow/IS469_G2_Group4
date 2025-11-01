@@ -104,13 +104,23 @@ class BaseLLMRouter(ABC):
 **Available Tools:**
 {tool_descriptions}
 
-**Decision Rules:**
-1. If no candidates yet → use "search_candidates"
-2. If candidates found but not enriched → use "analyze_github" or "get_personality"
-3. If enriched but not ranked → use "rank_candidates"
-4. If fit scores < {state.min_fit_score} and iterations < {state.max_iterations - 1} → use "expand_search"
-5. If goal achieved (≥{state.min_candidates} candidates with fit_score ≥ {state.min_fit_score}) → use "finish"
-6. If max iterations reached → use "finish" (make best with what we have)
+**Decision Rules (STRICT ORDER - CHECK STATE CAREFULLY):**
+
+🚨 NEVER use "search_candidates" if candidates > 0 in Current State above!
+
+1. If candidates = 0 → use "search_candidates"
+2. If candidates > 0 → use "analyze_github" 
+3. If enriched_candidates > 0 → use "get_personality"
+4. If candidates > 0 AND final_rankings = 0 → use "rank_candidates" (MANDATORY!)
+5. If final_rankings > 0 AND goal achieved → use "finish"
+6. If final_rankings > 0 AND goal NOT achieved AND iterations < max → use "expand_search"
+7. If max iterations reached → use "rank_candidates" if not ranked, else "finish"
+
+**CRITICAL RULES:**
+- NEVER search again if candidates > 0
+- MUST rank before finishing
+- Check "Current State" section above for exact counts
+- You ALREADY HAVE {len(state.candidates)} candidates! DO NOT SEARCH AGAIN!
 
 **IMPORTANT:** Respond with ONLY a JSON object (no markdown, no explanation):
 {{

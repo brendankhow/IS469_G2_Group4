@@ -58,8 +58,8 @@ class AgentState:
     goal_met: bool = False
     
     # Quality thresholds
-    min_candidates: int = 3
-    min_fit_score: float = 7.0
+    min_candidates: int = 1
+    min_fit_score: float = 5.0
     
     # Execution tracking
     tools_used: List[str] = field(default_factory=list)

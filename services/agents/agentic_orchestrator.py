@@ -110,6 +110,12 @@ class AgenticRecruitmentOrchestrator:
             if not result.success:
                 print(f"   ⚠️ Tool execution had errors (continuing anyway)")
             
+            # Debug: Show state after tool execution
+            print(f"\n   📊 State after tool execution:")
+            print(f"      - candidates: {len(state.candidates)}")
+            print(f"      - enriched_candidates: {len(state.enriched_candidates)}")
+            print(f"      - final_rankings: {len(state.final_rankings)}")
+            
             # Check if goal achieved
             if state.check_goal():
                 print(f"\n🎯 Goal achieved! Found {len([c for c in state.final_rankings if c.get('fit_score', 0) >= state.min_fit_score])} high-quality candidates")

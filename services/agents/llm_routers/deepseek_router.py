@@ -172,9 +172,10 @@ Return ONLY valid JSON array."""
     def _fallback_decision(self, state: AgentState) -> AgentDecision:
         """Rule-based fallback if LLM fails"""
         if not state.candidates:
-            return AgentDecision("search_candidates", "Fallback: No candidates yet", {"top_k": 10})
-        elif not state.enriched_candidates:
-            return AgentDecision("analyze_github", "Fallback: Need enrichment", {})
+            return AgentDecision("search_candidates", "Fallback: No candidates yet", {"top_k": 5, "threshold": 0.0})
+        elif state.candidates and not state.final_rankings:
+            # If we have candidates but not ranked, rank them (enrichment is optional)
+            return AgentDecision("rank_candidates", "Fallback: Need ranking", {})
         elif not state.final_rankings:
             return AgentDecision("rank_candidates", "Fallback: Need ranking", {})
         else:

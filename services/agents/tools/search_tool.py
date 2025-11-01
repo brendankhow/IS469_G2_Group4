@@ -28,32 +28,26 @@ class SearchCandidatesTool(BaseTool):
         start_time = time.time()
         
         try:
-            top_k = parameters.get("top_k", 10)
-            threshold = parameters.get("threshold", 0.1)
             
-            print(f"   🔍 Searching for candidates (top_k={top_k}, threshold={threshold})...")
+            print(f"   🔍 Searching for candidates")
             
             # Use RAG factory or basic vector search
             if feature_flags.ENABLE_CUSTOM_RAG or feature_flags.ENABLE_GRAPH_RAG:
                 rag_factory = RAGFactory()
                 matches = rag_factory.search_candidates(
                     query_text=state.query,
-                    top_k=top_k,
-                    filters=None
                 )
             else:
                 query_embedding = embedder.generate_embedding(state.query)
                 matches = VectorStore.search_similar_resumes(
                     query_embedding=query_embedding,
-                    top_k=top_k,
-                    threshold=threshold
                 )
             
             # Enrich with basic profile data
             enriched_matches = []
             seen_students = set()
             
-            for m in matches[:top_k]:
+            for m in matches:
                 sid = m.get("student_id")
                 
                 # Deduplicate
