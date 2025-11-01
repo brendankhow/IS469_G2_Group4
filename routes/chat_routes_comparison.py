@@ -80,13 +80,11 @@ async def compare_architectures(request: ComparisonRequest):
         print(f"{'='*80}")
         
         # Import here to avoid circular dependencies
-        from routes.chat_routes import community_chat, ChatRequest as RuleChatRequest
+        from routes.chat_routes import chat, ChatRequest as RuleChatRequest
         from routes.chat_routes_agentic import agentic_chat, AgenticChatRequest
+        from services.evaluation_service import evaluation_service
         
-        # Run both architectures in parallel
-        rule_start = time.time()
-        agentic_start = time.time()
-        
+        # Prepare requests
         rule_request = RuleChatRequest(
             message=request.message,
             temperature=request.temperature
@@ -100,13 +98,15 @@ async def compare_architectures(request: ComparisonRequest):
             temperature=request.temperature
         )
         
-        # Run both
-        rule_result, agentic_result = await asyncio.gather(
-            community_chat(rule_request),
-            agentic_chat(agentic_request)
-        )
-        
+        # Run rule-based (sync) first
+        # Note: chat() is synchronous, agentic_chat() is async
+        rule_start = time.time()
+        rule_result = chat(rule_request)
         rule_time = time.time() - rule_start
+        
+        # Run agentic (async) second
+        agentic_start = time.time()
+        agentic_result = await agentic_chat(agentic_request)
         agentic_time = time.time() - agentic_start
         
         # Extract metrics for rule-based
@@ -136,7 +136,7 @@ async def compare_architectures(request: ComparisonRequest):
         agentic_arch = ArchitectureResult(
             architecture="agentic",
             candidates_found=len(agentic_candidates),
-            execution_time=agentic_result.execution_time,
+            execution_time=agentic_time,  # Use measured time, not orchestrator's internal time
             llm_calls=router_stats.get("total_calls", 0),
             total_tokens=router_stats.get("total_tokens", 0),
             estimated_cost=router_stats.get("total_cost", 0.0),
@@ -147,8 +147,42 @@ async def compare_architectures(request: ComparisonRequest):
             avg_candidate_score=sum(agentic_scores) / len(agentic_scores) if agentic_scores else None
         )
         
+        # Store metrics in evaluation service
+        rule_based_metrics = evaluation_service.create_metrics(
+            architecture="rule-based",
+            query=request.message,
+            execution_time=rule_time,
+            llm_calls=1,
+            total_tokens=0,
+            estimated_cost=0.002,
+            candidates=[{"fit_score": score} for score in rule_scores],
+            goal_achieved=rule_arch.goal_achieved,
+            iterations=1,
+            min_fit_score=request.min_fit_score,
+            timestamp=datetime.now().isoformat()
+        )
+        
+        agentic_metrics = evaluation_service.create_metrics(
+            architecture="agentic",
+            query=request.message,
+            execution_time=agentic_time,  # Use measured time, not orchestrator's internal time
+            llm_calls=router_stats.get("total_calls", 0),
+            total_tokens=router_stats.get("total_tokens", 0),
+            estimated_cost=router_stats.get("total_cost", 0.0),
+            candidates=[{"fit_score": score} for score in agentic_scores],
+            goal_achieved=agentic_result.goal_achieved,
+            iterations=agentic_result.iterations,
+            min_fit_score=request.min_fit_score,
+            reasoning_log=agentic_result.reasoning_log,
+            timestamp=datetime.now().isoformat()
+        )
+        
+        # Compare and store in evaluation service
+        comparison_result = evaluation_service.compare_architectures(rule_based_metrics, agentic_metrics)
+        
         # Determine winner
-        winner, reason = _determine_winner(rule_arch, agentic_arch, request)
+        winner = comparison_result.winner
+        reason = comparison_result.winner_reason
         
         # Calculate comparison metrics
         comparison_metrics = {

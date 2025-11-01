@@ -14,6 +14,7 @@ from routes.student_routes import router as student_router
 from routes.graphrag_routes import router as graphrag_router
 from routes.personality_routes import router as personality_router
 from routes.customrag_routes import router as customrag_router
+from routes.evaluation_routes import router as evaluation_router
 
 import uvicorn
 import os 
@@ -55,6 +56,9 @@ def read_root():
 app.include_router(chat_router, prefix="/chat", tags=["Chat Helper"])
 app.include_router(chat_agentic_router, prefix="/chat/community", tags=["Chat Agentic"])
 app.include_router(chat_comparison_router, prefix="/chat", tags=["Architecture Comparison"])
+
+# evaluation routes
+app.include_router(evaluation_router, prefix="/evaluation", tags=["Evaluation"])
 
 # resume routes
 app.include_router(resume_router, prefix="/resume", tags=["Resume Helper"])
