@@ -58,11 +58,26 @@ class SearchCandidatesTool(BaseTool):
                 profile_resp = supabase.table("profiles").select("*").eq("id", sid).execute()
                 
                 if profile_resp.data:
+                    profile = profile_resp.data[0]
+                    
+                    # Debug: print available fields
+                    print(f"      🔍 Profile fields for {sid[:8]}: {list(profile.keys())}")
+                    print(f"      📋 Name field value: {profile.get('name')}")
+                    
+                    # Try different possible name fields
+                    name = (
+                        profile.get("name") or 
+                        profile.get("full_name") or 
+                        profile.get("student_name") or
+                        profile.get("display_name") or
+                        f"Student {sid[:8]}"  # Fallback to student ID prefix
+                    )
+                    
                     enriched_matches.append({
                         "student_id": sid,
-                        "name": profile_resp.data[0].get("name", "Unknown"),
-                        "skills": profile_resp.data[0].get("skills", "N/A"),
-                        "github_username": profile_resp.data[0].get("github_username", "N/A"),
+                        "name": name,
+                        "skills": profile.get("skills", "N/A"),
+                        "github_username": profile.get("github_username", "N/A"),
                         "resume_similarity": m.get("similarity", 0.0),
                         "resume_text": m.get("resume_text", "")[:500]
                     })

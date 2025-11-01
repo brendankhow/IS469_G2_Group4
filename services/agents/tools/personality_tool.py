@@ -36,14 +36,21 @@ class PersonalityAnalysisTool(BaseTool):
             if tasks:
                 personality_results = await asyncio.gather(*tasks, return_exceptions=True)
                 
-                # Merge personality data back
+                # Merge personality data back INTO existing candidate data (don't replace!)
                 personality_dict = {p["student_id"]: p for p in personality_results if isinstance(p, dict)}
                 
                 for candidate in state.candidates:
                     sid = candidate["student_id"]
                     if sid in personality_dict:
+                        # UPDATE existing candidate dict (don't replace!)
                         candidate["personality_data"] = personality_dict[sid].get("data")
                         candidate["personality_analyzed"] = True
+            
+            # Update enriched candidates list (those with either GitHub or personality)
+            state.enriched_candidates = [
+                c for c in state.candidates 
+                if c.get("github_analyzed") or c.get("personality_analyzed")
+            ]
             
             # Count enriched candidates
             enriched_count = sum(1 for c in state.candidates if c.get("personality_analyzed"))

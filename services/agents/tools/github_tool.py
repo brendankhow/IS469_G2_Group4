@@ -41,13 +41,15 @@ class GitHubAnalysisTool(BaseTool):
             if tasks:
                 enriched = await asyncio.gather(*tasks, return_exceptions=True)
                 
-                # Merge enriched data back
+                # Merge enriched data back INTO existing candidate data (don't replace!)
                 enriched_dict = {e["student_id"]: e for e in enriched if isinstance(e, dict)}
                 
                 for candidate in state.candidates:
                     sid = candidate["student_id"]
                     if sid in enriched_dict:
-                        candidate.update(enriched_dict[sid])
+                        github_data = enriched_dict[sid]
+                        candidate["github_projects"] = github_data.get("github_projects", [])
+                        candidate["portfolio_summary"] = github_data.get("portfolio_summary")
                         candidate["github_analyzed"] = True
             
             # Update state
