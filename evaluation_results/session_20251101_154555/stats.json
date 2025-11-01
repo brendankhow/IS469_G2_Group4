@@ -1,0 +1,16 @@
+{
+  "total_comparisons": 1,
+  "wins": { "rule_based": 1, "agentic": 0, "ties": 0 },
+  "win_rates": { "rule_based": 1.0, "agentic": 0.0, "tie": 0.0 },
+  "average_metrics": {
+    "speedup_factor": 0.7148628967181855,
+    "cost_ratio": 2.068,
+    "quality_improvement": -3.0
+  },
+  "goal_achievement_rates": { "rule_based": 1.0, "agentic": 1.0 },
+  "performance_summary": {
+    "speed_winner": "rule-based",
+    "cost_winner": "rule-based",
+    "quality_winner": "rule-based"
+  }
+}
