@@ -3,6 +3,7 @@ from config.feature_flags import feature_flags
 from services.customrag_service import CustomRAGService
 from services.graphrag_service import GraphRAGService  
 from utils.timer import time_this_function
+from services.vector_store import VectorStore
 
 class RAGFactory:
     """Factory for Custom and Graph RAG strategies"""
@@ -116,11 +117,12 @@ class RAGFactory:
             
             # Normalize similarity field
             similarity = (
-                result.get("rerank_score") or # i'm using the rerank score as the best score from custom rag 
+                result.get("rerank_score") or 
                 result.get("similarity") or 
                 result.get("max_similarity") or 
                 result.get("score") or 
-                result.get("relevance_score") or
+                result.get("relevance_score") or # current graph RAG uses this
+                result.get("combined_score") or # current custom RAG uses this 
                 0.0
             )
             
@@ -137,6 +139,9 @@ class RAGFactory:
                     ""
                 )
             
+            if resume_text == "": 
+                resume_text = VectorStore.get_resume_by_student_id(student_id).get("resume_text")
+
             # Create standardized result
             standardized_result = {
                 "student_id": result.get("student_id"),
