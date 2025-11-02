@@ -9,20 +9,28 @@ from pydantic import BaseModel
 from typing import List, Dict, Optional
 from services.agents.agentic_orchestrator import AgenticRecruitmentOrchestrator
 from services.agents.llm_routers.deepseek_router import DeepSeekRouter
+from services.agents.llm_routers.llama_router import LlamaRouter
 from services.embedder import embedder
 from services.vector_store import VectorStore
 from services.supabase_client import supabase
 from services.github.github_analysis import GitHubAnalysisService
 from utils.timer import time_this_function
+from typing import Literal
 
 router = APIRouter()
 
 # Initialize GitHub analyzer
 github_analyzer = GitHubAnalysisService()
 
-# Initialize agentic orchestrator with DeepSeek router
+# Initialize routers (singleton instances)
 deepseek_router = DeepSeekRouter()
-agentic_orchestrator = AgenticRecruitmentOrchestrator(llm_router=deepseek_router)
+llama_router = LlamaRouter()
+
+# Router registry
+ROUTER_REGISTRY = {
+    "deepseek": deepseek_router,
+    "llama": llama_router
+}
 
 class AgenticChatRequest(BaseModel):
     message: str = "I'm looking for a software engineer with experience in frontend tech like typescript and javascript."
@@ -30,6 +38,7 @@ class AgenticChatRequest(BaseModel):
     min_fit_score: float = 0.0
     max_iterations: int = 5
     temperature: float = 0.7
+    router: Literal["deepseek", "llama"] = "deepseek"  # LLM router selection
 
 class CandidateEvaluation(BaseModel):
     name: str
@@ -82,8 +91,15 @@ async def agentic_chat(request: AgenticChatRequest):
     try:
         print(f"\n{'#'*80}")
         print(f"# AGENTIC ENDPOINT CALLED")
+        print(f"# Router: {request.router}")
         print(f"# Query: {request.message[:60]}...")
         print(f"{'#'*80}")
+        
+        # Select router based on request
+        selected_router = ROUTER_REGISTRY.get(request.router, deepseek_router)
+        
+        # Create orchestrator with selected router
+        agentic_orchestrator = AgenticRecruitmentOrchestrator(llm_router=selected_router)
         
         # Let agent autonomously search
         result = await agentic_orchestrator.find_candidates(

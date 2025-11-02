@@ -9,6 +9,7 @@ from routes.resume_routes import router as resume_router
 from routes.chat_routes import router as chat_router
 from routes.chat_routes_agentic import router as chat_agentic_router
 from routes.chat_routes_comparison import router as chat_comparison_router
+from routes.chat_routes_router_comparison import router as router_comparison_router
 from routes.github_routes import router as github_router
 from routes.student_routes import router as student_router
 from routes.graphrag_routes import router as graphrag_router
@@ -56,6 +57,7 @@ def read_root():
 app.include_router(chat_router, prefix="/chat", tags=["Chat Helper"])
 app.include_router(chat_agentic_router, prefix="/chat/community", tags=["Chat Agentic"])
 app.include_router(chat_comparison_router, prefix="/chat", tags=["Architecture Comparison"])
+app.include_router(router_comparison_router, prefix="/chat", tags=["Router Comparison"])
 
 # evaluation routes
 app.include_router(evaluation_router, prefix="/evaluation", tags=["Evaluation"])
