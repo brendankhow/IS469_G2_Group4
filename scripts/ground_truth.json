@@ -1,0 +1,48 @@
+{
+  "queries": [
+    {
+      "query_text": "Looking for a student skilled in Python, data analysis, and Tableau for a sales forecasting project.",
+      "top_candidates": ["stu-001", "stu-008", "stu-011"]
+    },
+    {
+      "query_text": "Need a student experienced in machine learning and housing price prediction using Python and scikit-learn.",
+      "top_candidates": ["stu-003", "stu-013", "stu-010"]
+    },
+    {
+      "query_text": "Seeking a student with front-end development skills, React, and basic data analysis.",
+      "top_candidates": ["stu-005", "stu-012", "stu-008"]
+    },
+    {
+      "query_text": "Looking for someone with NLP and chatbot project experience using Python and spaCy.",
+      "top_candidates": ["stu-007", "stu-003", "stu-013"]
+    },
+    {
+      "query_text": "Need a student experienced in SQL, data cleaning, and dashboard building for fintech analysis.",
+      "top_candidates": ["stu-004", "stu-014", "stu-008"]
+    },
+    {
+      "query_text": "Seeking AI and computer vision skills for image classification using Python and OpenCV.",
+      "top_candidates": ["stu-010", "stu-003", "stu-013"]
+    },
+    {
+      "query_text": "Looking for a Business student with marketing strategy, project management, and analytical skills.",
+      "top_candidates": ["stu-021"]
+    },
+    {
+      "query_text": "Need an Economics student skilled in financial modeling and market research.",
+      "top_candidates": ["stu-022"]
+    },
+    {
+      "query_text": "Seeking a Social Science student familiar with survey design and data analysis using SPSS or Excel.",
+      "top_candidates": ["stu-023"]
+    },
+    {
+      "query_text": "Looking for a Business Analytics student experienced in SQL, Excel, and Power BI dashboard creation.",
+      "top_candidates": ["stu-024"]
+    },
+    {
+      "query_text": "Need a Psychology student with experience in behavioral studies and Python data analysis.",
+      "top_candidates": ["stu-025"]
+    }
+  ]
+}

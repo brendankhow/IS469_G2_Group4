@@ -1,0 +1,136 @@
+{
+  "resumes": [
+    {
+      "student_id": "stu-001",
+      "student_name": "Alice Tan",
+      "resume_text": "Alice is a data analytics student skilled in Python, SQL, and Tableau. She has done projects on sales forecasting and data visualization."
+    },
+    {
+      "student_id": "stu-002",
+      "student_name": "Brian Lim",
+      "resume_text": "Brian is an Information Systems student with experience in Java, C++, and backend development. He contributed to a web app project for e-commerce."
+    },
+    {
+      "student_id": "stu-003",
+      "student_name": "Chloe Wong",
+      "resume_text": "Chloe has experience in machine learning and AI, familiar with Python, scikit-learn, and TensorFlow. She worked on predicting housing prices."
+    },
+    {
+      "student_id": "stu-004",
+      "student_name": "Daniel Lee",
+      "resume_text": "Daniel is a student skilled in SQL, data cleaning, and dashboard building. He interned at a fintech company analyzing customer data."
+    },
+    {
+      "student_id": "stu-005",
+      "student_name": "Emily Chen",
+      "resume_text": "Emily specializes in front-end development with React and Vue. She also has basic Python skills for data analysis projects."
+    },
+    {
+      "student_id": "stu-006",
+      "student_name": "Farhan Ali",
+      "resume_text": "Farhan is interested in cloud computing and devops. He knows Python, AWS, and Docker, and contributed to a CI/CD pipeline project."
+    },
+    {
+      "student_id": "stu-007",
+      "student_name": "Grace Lim",
+      "resume_text": "Grace focuses on natural language processing. She has experience in Python, spaCy, and building chatbots for academic projects."
+    },
+    {
+      "student_id": "stu-008",
+      "student_name": "Hassan Ibrahim",
+      "resume_text": "Hassan is skilled in data visualization using Python, Tableau, and Power BI. He analyzed sales and marketing data for a student consultancy."
+    },
+    {
+      "student_id": "stu-009",
+      "student_name": "Isabella Tan",
+      "resume_text": "Isabella has experience in backend APIs with Node.js and Python. She also worked with PostgreSQL databases and data ETL pipelines."
+    },
+    {
+      "student_id": "stu-010",
+      "student_name": "Jason Ng",
+      "resume_text": "Jason focuses on AI and computer vision projects using Python and OpenCV. He built an image classification model for a university project."
+    },
+    {
+      "student_id": "stu-011",
+      "student_name": "Karen Ho",
+      "resume_text": "Karen is experienced in business analytics, Python, and SQL. She conducted data-driven research for a market research project."
+    },
+    {
+      "student_id": "stu-012",
+      "student_name": "Leo Tan",
+      "resume_text": "Leo has worked on mobile app development using Flutter and React Native. He also has Python skills for data handling."
+    },
+    {
+      "student_id": "stu-013",
+      "student_name": "Maya Patel",
+      "resume_text": "Maya focuses on data science and machine learning. She worked on predicting customer churn and implementing recommendation systems."
+    },
+    {
+      "student_id": "stu-014",
+      "student_name": "Nadia Rahman",
+      "resume_text": "Nadia has experience in SQL, Python, and Power BI. She built dashboards for student-led research projects."
+    },
+    {
+      "student_id": "stu-015",
+      "student_name": "Oliver Lim",
+      "resume_text": "Oliver is skilled in Python, R, and statistical modeling. He analyzed survey datasets for university projects."
+    },
+    {
+      "student_id": "stu-021",
+      "student_name": "Aaron Koh",
+      "resume_text": "Aaron is a Business student skilled in marketing strategies, project management, and data-driven decision making."
+    },
+    {
+      "student_id": "stu-022",
+      "student_name": "Beth Tan",
+      "resume_text": "Beth studies Economics with experience in financial modeling, market research, and econometrics projects."
+    },
+    {
+      "student_id": "stu-023",
+      "student_name": "Cynthia Ong",
+      "resume_text": "Cynthia focuses on Social Science research. She has skills in survey design, data analysis with Excel and SPSS, and qualitative research."
+    },
+    {
+      "student_id": "stu-024",
+      "student_name": "David Lim",
+      "resume_text": "David is a Business Analytics student skilled in Excel, SQL, and data visualization using Tableau and Power BI."
+    },
+    {
+      "student_id": "stu-025",
+      "student_name": "Ella Wong",
+      "resume_text": "Ella studies Psychology and has experience in behavioral studies, data collection, and analysis using Python for experimental data."
+    }
+  ],
+  "githubs": [
+    {
+      "student_id": "stu-001",
+      "student_name": "Alice Tan",
+      "chunk_text": "GitHub repo for sales forecasting project using Python and pandas. Includes scripts for data cleaning and visualization."
+    },
+    {
+      "student_id": "stu-003",
+      "student_name": "Chloe Wong",
+      "chunk_text": "GitHub repo for ML housing price prediction. Uses scikit-learn pipelines and regression models."
+    },
+    {
+      "student_id": "stu-005",
+      "student_name": "Emily Chen",
+      "chunk_text": "Front-end project repo with React components and visualization dashboards."
+    },
+    {
+      "student_id": "stu-007",
+      "student_name": "Grace Lim",
+      "chunk_text": "NLP chatbot project using Python and spaCy for intent recognition."
+    },
+    {
+      "student_id": "stu-010",
+      "student_name": "Jason Ng",
+      "chunk_text": "Computer vision repo with OpenCV image classification models."
+    },
+    {
+      "student_id": "stu-013",
+      "student_name": "Maya Patel",
+      "chunk_text": "ML project predicting customer churn and building recommendation systems."
+    }
+  ]
+}
