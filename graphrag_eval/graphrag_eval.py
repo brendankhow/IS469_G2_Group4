@@ -34,8 +34,7 @@ class GraphRAGEvaluator:
         self.groq_api_key = groq_api_key or os.getenv("GROQ_API_KEY")
 
         if self.use_ragas and not self.groq_api_key:
-            logger.warning("GROQ_API_KEY not found. Set it via environment variable or pass to constructor.")
-            logger.warning("Get free API key at: https://console.groq.com")
+            logger.warning("GROQ_API_KEY not found. Set it via environment variable or pass to constructor. Get free API key at: https://console.groq.com")
             self.use_ragas = False
 
     # RETRIEVAL METRICS
@@ -160,7 +159,7 @@ class GraphRAGEvaluator:
         }
 
     def _setup_ragas_with_groq(self):
-        """Setup RAGAS to use Groq API (fast & free)."""
+        """Setup RAGAS to use Groq API."""
         try:
             from langchain_groq import ChatGroq
             from langchain_core.embeddings import Embeddings
@@ -172,7 +171,7 @@ class GraphRAGEvaluator:
                 model=groq_model_name,
                 api_key=self.groq_api_key,
                 temperature=0.0,
-                n=1  # ✅ Fix: request only 1 generation to avoid 400 errors
+                n=1  # request only 1 generation to avoid 400 errors
             )
 
             class LocalEmbeddingsWrapper(Embeddings):
