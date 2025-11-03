@@ -4,6 +4,7 @@ from llama_index.core.schema import Document as LlamaDocument
 from llama_index.core import Settings
 import json
 import logging
+import numpy as np
 
 from .vector_store import VectorStore
 from .llama_wrappers import custom_llm, custom_embed_model, local_llm_client
@@ -20,6 +21,41 @@ class GraphRAGService:
     def __init__(self):
         """Initialize GraphRAG service."""
         self.batch_size = 100  # for batch embedding generation
+        self.reranker = None  # lazy load reranker model
+        
+    def _get_reranker(self):
+        """Lazy load (load only when needed) cross-encoder reranker model."""
+        if self.reranker is None:
+            try:
+                from sentence_transformers import CrossEncoder
+                logger.info("Loading cross-encoder reranker model...")
+                
+                models_to_try = [
+                    'BAAI/bge-reranker-base',                 # Better for general semantic understanding
+                    'cross-encoder/ms-marco-MiniLM-L-12-v2',  # Larger MS-MARCO model
+                    'cross-encoder/ms-marco-MiniLM-L-6-v2'
+                ]
+                
+                for model_name in models_to_try:
+                    try:
+                        logger.info(f"Trying to load: {model_name}")
+                        self.reranker = CrossEncoder(model_name)
+                        logger.info(f"Successfully loaded reranker: {model_name}")
+                        break
+                    except Exception as e:
+                        logger.warning(f"Failed to load {model_name}: {str(e)}")
+                        continue
+                
+                if self.reranker is None:
+                    raise Exception("Failed to load any reranker model")
+                    
+            except ImportError:
+                logger.error("sentence-transformers not installed. Install with: pip install sentence-transformers")
+                raise
+            except Exception as e:
+                logger.error(f"Failed to load reranker model: {str(e)}")
+                raise
+        return self.reranker
 
     def build_global_graph_index(self) -> Optional[PropertyGraphIndex]:
         """
@@ -122,12 +158,114 @@ class GraphRAGService:
             logger.error(f"Failed to build graph index: {str(e)}", exc_info=True)
             raise
 
+    def _rerank_candidates(
+        self, 
+        query_text: str, 
+        student_contexts: Dict[str, Dict], 
+        top_k: int
+    ) -> Dict[str, Dict]:
+        """
+        Rerank candidates (not individual nodes) using cross-encoder.
+        
+        Args:
+            query_text: Original search query
+            student_contexts: Dict mapping student_id to their node context
+            top_k: Number of top candidates to return
+            
+        Returns:
+            Reranked student_contexts dict
+        """
+        if not student_contexts or len(student_contexts) <= 1:
+            return student_contexts
+        
+        try:
+            logger.info(f"Reranking {len(student_contexts)} candidates with cross-encoder...")
+            
+            reranker = self._get_reranker()
+            
+            # build aggregated text for each candidate
+            candidate_list = []
+            for student_id, context in student_contexts.items():
+                nodes = context["nodes"]
+                
+                combined_text = ""
+                
+                first_node = nodes[0]
+                student_name = first_node.get("student_name", "Unknown")
+                github = first_node.get("github_username", "")
+                
+                combined_text += f"Candidate: {student_name}\n"
+                if github:
+                    combined_text += f"GitHub: {github}\n"
+                
+                node_texts = []
+                for node in nodes:
+                    text = node.get("text", "").strip()
+                    metadata = node.get("metadata", {})
+                    
+                    # enrich GitHub nodes with metadata
+                    if metadata.get("source") == "github":
+                        repo = metadata.get("repo_name", "")
+                        lang = metadata.get("language", "")
+                        if repo:
+                            text += f" [Repo: {repo}]"
+                        if lang:
+                            text += f" [Language: {lang}]"
+                    
+                    node_texts.append(text)
+                
+                # combine node texts but limit total length to 2000 chars for cross-encoder
+                combined_text += "\n".join(node_texts)[:2000]
+                
+                candidate_list.append({
+                    "student_id": student_id,
+                    "text": combined_text,
+                    "context": context
+                })
+            
+            # prepare query-candidate pairs
+            pairs = [(query_text, candidate["text"]) for candidate in candidate_list]
+            
+            # get relevance scores from cross-encoder
+            scores = reranker.predict(pairs)
+            scores = np.array(scores)
+            
+            # get indices sorted by score (descending)
+            ranked_indices = np.argsort(scores)[::-1]
+            
+            # reorder candidates and update scores
+            reranked_contexts = {}
+            for rank, idx in enumerate(ranked_indices[:top_k]):
+                candidate = candidate_list[int(idx)]
+                student_id = candidate["student_id"]
+                context = candidate["context"]
+                
+                # update max_similarity with reranker score
+                context["max_similarity"] = float(scores[idx])
+                context["rerank_position"] = rank + 1
+                context["original_similarity"] = context.get("max_similarity", 0.0)
+                
+                reranked_contexts[student_id] = context
+            
+            logger.info(f"Successfully reranked to {len(reranked_contexts)} candidates")
+            top_scores = [f"{list(reranked_contexts.values())[i]['max_similarity']:.3f}" 
+                         for i in range(min(3, len(reranked_contexts)))]
+            logger.info(f"Top 3 candidate rerank scores: {top_scores}")
+            
+            return reranked_contexts
+            
+        except Exception as e:
+            logger.warning(f"Candidate reranking failed: {str(e)}, using original order")
+            # return top_k from original
+            return dict(list(student_contexts.items())[:top_k])
+
     def query_candidates(
         self,
         query_text: str,
         top_k: int = 3,
         nodes_per_candidate: int = 5,
-        filters: Optional[Dict] = None
+        filters: Optional[Dict] = None,
+        use_reranking: bool = False     # can change to True if we want reranking enabled
     ) -> Dict:
         """
         Search GraphRAG nodes and return top_k candidates with balanced representation.
@@ -137,6 +275,7 @@ class GraphRAGService:
             top_k: Number of candidates to return (default: 3)
             nodes_per_candidate: Maximum nodes per candidate to prevent imbalance
             filters: Optional filters for search
+            use_reranking: Whether to apply cross-encoder reranking at candidate level (but default value is False)
         """
         try:
             logger.info(f"Processing query: {query_text[:100]}")
@@ -144,9 +283,10 @@ class GraphRAGService:
             query_embedding = custom_embed_model.get_query_embedding(query_text)
             
             # retrieve more nodes initially to ensure candidate diversity
+            initial_retrieval_size = top_k * nodes_per_candidate * 4
             retrieved_nodes = VectorStore.search_graph_nodes(
                 query_embedding=query_embedding,
-                top_k=top_k * nodes_per_candidate * 3,  # 3 * 5 * 3 = 45 nodes
+                top_k=initial_retrieval_size,
                 filters=filters,
                 threshold=0.3
             )
@@ -173,14 +313,21 @@ class GraphRAGService:
                     if similarity > student_contexts[sid]["max_similarity"]:
                         student_contexts[sid]["max_similarity"] = similarity
 
-            # sort candidates by their best matching node and take top_k (top 3)
-            sorted_candidates = sorted(
-                student_contexts.items(),
-                key=lambda x: x[1]["max_similarity"],
-                reverse=True
-            )[:top_k]
-            
-            student_contexts = dict(sorted_candidates)
+            # apply candidate-level reranking if enabled
+            if use_reranking and len(student_contexts) > 1:
+                student_contexts = self._rerank_candidates(
+                    query_text=query_text,
+                    student_contexts=student_contexts,
+                    top_k=top_k
+                )
+            else:
+                # sort candidates by their best matching node and take top_k
+                sorted_candidates = sorted(
+                    student_contexts.items(),
+                    key=lambda x: x[1]["max_similarity"],
+                    reverse=True
+                )[:top_k]
+                student_contexts = dict(sorted_candidates)
 
             # build candidate context block for prompt
             candidates_block = ""
@@ -228,7 +375,8 @@ class GraphRAGService:
             response_text = local_llm_client.generate_text(
                 system_prompt=system_prompt,
                 user_prompt=user_prompt,
-                temperature=0.1
+                temperature=0.1,
+                max_tokens=2048
             )
 
             # Parse JSON safely
