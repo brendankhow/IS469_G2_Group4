@@ -83,7 +83,6 @@ class CustomRAGService:
             # --- Combine rerank results ---
             ranked_entries = []
             
-            # *** THIS IS THE FIX ***
             for r in response.results:
                 original_index = r.index
                 original_doc = id_map[original_index] # Get the original doc using the correct index
@@ -92,10 +91,9 @@ class CustomRAGService:
                     "student_id": original_doc.get("student_id"),
                     "type": original_doc.get("type"),
                     "rerank_score": r.relevance_score
-                    # We don't need the text anymore, just the score and ID
                 })
 
-            # --- Merge scores per student (Your Requested Logic) ---
+            # --- Merge scores per student  ---
             merged_candidates = {}
             for item in ranked_entries:
                 sid = item["student_id"]
@@ -121,9 +119,8 @@ class CustomRAGService:
                     merged_candidates[sid] = {
                         "student_id": sid,
                         "student_name": student_name,
-                        "resume_text": resume_text, # This is the resume info you wanted
+                        "resume_text": resume_text, # Only return resume text
                         "combined_score": 0.0,
-                        # "relevant_chunks_count": 0 # Optional
                     }
 
                 # Add the score (from either resume or github) to the total
