@@ -52,6 +52,27 @@ interface CandidateResult {
   github_link: string;
   candidate_link: string;
   student_id?: string; // Added to track student ID for chat
+import { useState, useEffect, useRef } from "react"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
+import { ScrollArea } from "@/components/ui/scroll-area"
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet"
+import { Loader2, Send, Search, Sparkles, Star, Github, ExternalLink, MessageSquare, Bot, User, X, Brain } from "lucide-react"
+import { useToast } from "@/hooks/use-toast"
+import ReactMarkdown from "react-markdown"
+import { Badge } from "@/components/ui/badge"
+
+interface CandidateResult {
+  name: string
+  fit_score: number
+  evaluation_bullets: string[]
+  notable_github_projects: string[]
+  next_step: string
+  personality_insight: string  // Personality insights from Big Five analysis
+  github_link: string
+  candidate_link: string
+  student_id?: string  // Added to track student ID for chat
 }
 
 interface SearchResult {
@@ -807,6 +828,15 @@ export default function HeadhuntingPage() {
                                             }
                                           )}
                                         </ul>
+                                      </div>
+                                    )}
+                                    {candidate.personality_insight && (
+                                      <div className="pt-3 border-t-2">
+                                        <p className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1">
+                                          <Brain className="h-3 w-3" />
+                                          Personality & Cultural Fit
+                                        </p>
+                                        <p className="text-sm italic">{candidate.personality_insight}</p>
                                       </div>
                                     )}
                                     <div className="pt-3 border-t-2">

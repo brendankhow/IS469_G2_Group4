@@ -15,3 +15,9 @@ torchvision
 opencv-python
 cohere
 numpy<2
+matplotlib
+scikit-learn
+datasets
+ragas
+pandas
+langchain-groq

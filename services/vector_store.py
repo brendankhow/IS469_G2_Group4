@@ -81,6 +81,26 @@ class VectorStore:
         return response.data
     
     @staticmethod
+    def search_similar_github_profiles(
+        query_embedding: List[float],
+        top_k: int = 10,
+        threshold: float = 0.5
+    ) -> List[Dict]:
+        """
+        Search for similar GitHub CHUNKS globally using the match_github_chunks function.
+        """
+        print(f"Executing RPC match_github_chunks (global search)")
+        response = supabase.rpc(
+            "match_github_chunks", # <-- USE THE NEW GITHUB RPC
+            {
+                "query_embedding": query_embedding,
+                "match_count": top_k,
+                "match_threshold": threshold
+            }
+        ).execute()
+        return response.data
+    
+    @staticmethod
     def search_similar_resumes(
         query_embedding: List[float],
         top_k: int = 10,

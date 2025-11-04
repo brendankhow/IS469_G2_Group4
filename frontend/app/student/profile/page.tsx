@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { PDFViewerModal } from "@/components/pdf-viewer-modal";
+import { ShareableChatLink } from "@/components/shareable-chat-link";
 
 interface UserProfile {
   id: number;
@@ -461,6 +462,16 @@ export default function ProfilePage() {
         <p className="text-muted-foreground">Manage your account information</p>
       </div>
 
+      {/* Shareable Chat Link - Only show if profile is saved */}
+      {profile?.id && (
+        <div className="mt-6">
+          <ShareableChatLink 
+            studentId={profile.id.toString()} 
+            studentName={profile.name}
+          />
+        </div>
+      )}
+      
       <div className="grid gap-6 lg:grid-cols-2">
         <Card>
           <CardHeader>

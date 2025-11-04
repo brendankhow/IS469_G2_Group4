@@ -37,6 +37,7 @@ class CandidateEvaluation(BaseModel):
     evaluation_bullets: List[str]
     notable_github_projects: List[str]
     next_step: str
+    personality_insight: str  # Add personality insight field
     github_link: str
     candidate_link: str
     student_id: Optional[str] = None  # Add student_id for frontend tracking
@@ -146,6 +147,20 @@ def chat(request: ChatRequest):
                         "similarity": gh.get("similarity", 0.0)
                     })
             
+            # Get personality data for this student
+            personality_data = None
+            try:
+                personality_resp = supabase.table("personality_analyses")\
+                    .select("*")\
+                    .eq("student_id", sid)\
+                    .order("created_at", desc=True)\
+                    .execute()
+                
+                if personality_resp.data and len(personality_resp.data) > 0:
+                    personality_data = personality_resp.data[0]  # Take the most recent one
+            except Exception as e:
+                print(f"Could not fetch personality data for student {sid}: {e}")
+            
             enriched_candidates.append({
                 "student_id": sid,
                 "name": profile.get("name", "Unknown"),
@@ -154,7 +169,8 @@ def chat(request: ChatRequest):
                 "resume_similarity": m.get("similarity", 0.0),
                 "resume_excerpt": m.get("resume_text", ""),
                 "github_projects": github_projects,
-                "portfolio_summary": portfolio_summary  # Add portfolio overview
+                "portfolio_summary": portfolio_summary,  # Add portfolio overview
+                "personality_data": personality_data  # Add personality data
             })
 
         # Build enriched RAG context with GitHub data
@@ -208,6 +224,17 @@ def chat(request: ChatRequest):
                     candidate_info.append(f"    Topics: {', '.join(proj['topics'][:3])}")
                     candidate_info.append(f"    {proj['description'][:200]}")
             
+            # Add personality data if available
+            if c.get('personality_data'):
+                pd = c['personality_data']
+                candidate_info.append("\n🧠 Personality Profile (Big Five):")
+                candidate_info.append(f"  • Extraversion: {pd.get('extraversion', 0):.2f}")
+                candidate_info.append(f"  • Agreeableness: {pd.get('agreeableness', 0):.2f}")
+                candidate_info.append(f"  • Conscientiousness: {pd.get('conscientiousness', 0):.2f}")
+                candidate_info.append(f"  • Emotional Stability: {1 - pd.get('neuroticism', 0):.2f} (inverse of neuroticism)")
+                candidate_info.append(f"  • Openness: {pd.get('openness', 0):.2f}")
+                candidate_info.append(f"  • Interview Score: {pd.get('interview_score', 0):.2f}")
+            
             rag_context_parts.append("\n".join(candidate_info))
         
         rag_context = "\n\n---\n\n".join(rag_context_parts)
@@ -215,16 +242,17 @@ def chat(request: ChatRequest):
         SYSTEM_PROMPT = """
             You are a helpful professional recruiter assistant. The user will be giving you requirements such as job description, good to have experience etc. 
 
-            Rank candidates based on their skills, resume experience, AND GitHub portfolio projects. Github projects that demonstrate relevant skills and experience should be weighted heavily in your evaluation and if it doesn't match the job requirement, it should not be penalised. 
+            Rank candidates based on their skills, resume experience, GitHub portfolio projects, AND personality traits (Big Five). Github projects that demonstrate relevant skills and experience should be weighted heavily in your evaluation and if it doesn't match the job requirement, it should not be penalised. 
 
             For each candidate provide:
-            (1) Fit score (0-10) - consider both resume AND GitHub projects with portfolio analysis
+            (1) Fit score (0-10) - consider resume, GitHub projects, portfolio analysis, AND personality fit
             (2) 3 bullets tying their experience/projects/skills to the job requirements
                 • [Bullet 1: Tie specific experience to job requirement and provide evidence from the resume to support your claim]
                 • [Bullet 2: Highlight relevant skills or projects with technical evidence]
                 • [Bullet 3: Note any standout achievements or portfolio insights]
             (3) Notable GitHub projects that demonstrate relevant skills (use project analysis data)
             (4) Recommended next step (interview/phone screen/reject) - if the fit score is 8 or above, recommend interview
+            (5) Personality insight (1-2 sentences) - summarize key personality traits from Big Five scores and how they relate to the role (e.g., "High conscientiousness and emotional stability suggest strong reliability under pressure" or "Balanced extraversion with high openness indicates adaptability in collaborative environments")
 
             **Evaluation Framework:**
 
@@ -243,7 +271,16 @@ def chat(request: ChatRequest):
             - Low GitHub match scores should NOT penalize candidates
             - Missing GitHub data is neutral (not a negative)
 
-            3. **Scoring Guidelines:**
+            3. **Personality & Cultural Fit (0% weight - JUST FOR INSIGHTS):**
+            - Big Five personality traits alignment with role requirements
+            - Interview score and communication style
+            - Team collaboration potential (Agreeableness, Extraversion)
+            - Work style and reliability (Conscientiousness, Emotional Stability)
+            - Innovation and learning potential (Openness)
+            - Missing personality data is neutral (not a negative)
+            - **IF NO PERSONALITY DATA, RETURN AN EMPTY STRING**
+
+            4. **Scoring Guidelines:**
             - 9-10: Perfect match with strong portfolio evidence and technical depth
             - 7-8: Strong match with good portfolio or excellent resume alone
             - 5-6: Moderate match, some relevant experience
@@ -281,6 +318,7 @@ def chat(request: ChatRequest):
                         "Project 2: Description"
                     ],
                     "next_step": "Interview | Phone Screen | Reject",
+                    "personality_insight": "1-2 sentence summary of personality traits and cultural fit based on Big Five scores",
                     "github_link": "https://github.com/username",
                     "candidate_link": ""
                 }

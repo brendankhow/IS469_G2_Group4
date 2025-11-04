@@ -466,7 +466,7 @@ export default function PersonalityRecordPage() {
               maxDuration={60}
               minDuration={10}
               maxFileSize={100 * 1024 * 1024}
-              allowUpload={false}
+              allowUpload={true}
             />
           )}
 

@@ -7,12 +7,16 @@ from services.llm_client import llm_client
 from fastapi.middleware.cors import CORSMiddleware
 from routes.resume_routes import router as resume_router
 from routes.chat_routes import router as chat_router
+from routes.chat_routes_agentic import router as chat_agentic_router
+from routes.chat_routes_comparison import router as chat_comparison_router
+from routes.chat_routes_router_comparison import router as router_comparison_router
 from routes.github_routes import router as github_router
 from routes.student_routes import router as student_router
 from routes.graphrag_routes import router as graphrag_router
 from routes.personality_routes import router as personality_router
 from routes.customrag_routes import router as customrag_router
 from routes.schedule_routes import router as schedule_router
+from routes.evaluation_routes import router as evaluation_router
 
 import uvicorn
 import os 
@@ -52,6 +56,12 @@ def read_root():
 
 # chat routes
 app.include_router(chat_router, prefix="/chat", tags=["Chat Helper"])
+app.include_router(chat_agentic_router, prefix="/chat/community", tags=["Chat Agentic"])
+app.include_router(chat_comparison_router, prefix="/chat", tags=["Architecture Comparison"])
+app.include_router(router_comparison_router, prefix="/chat", tags=["Router Comparison"])
+
+# evaluation routes
+app.include_router(evaluation_router, prefix="/evaluation", tags=["Evaluation"])
 
 # resume routes
 app.include_router(resume_router, prefix="/resume", tags=["Resume Helper"])

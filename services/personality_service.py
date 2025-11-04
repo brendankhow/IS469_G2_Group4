@@ -18,15 +18,15 @@ import os
 class PersonalityAnalysisModel(nn.Module):
     """ResNet50 + LSTM model for personality prediction"""
     
-    def __init__(self, aggregation='lstm', resnet_version='resnet50'):
+    def __init__(self, aggregation='attention', resnet_version='resnet50'):
         super().__init__()
         
         if resnet_version == 'resnet50':
             resnet = models.resnet50(weights=models.ResNet50_Weights.IMAGENET1K_V1)
             self.feature_dim = 2048
-        elif resnet_version == 'resnet18':
-            resnet = models.resnet18(weights=models.ResNet18_Weights.IMAGENET1K_V1)
-            self.feature_dim = 512
+        # elif resnet_version == 'resnet18':
+        #     resnet = models.resnet18(weights=models.ResNet18_Weights.IMAGENET1K_V1)
+        #     self.feature_dim = 512
         else:
             raise ValueError(f"Unknown resnet_version: {resnet_version}")
         
@@ -82,9 +82,10 @@ class PersonalityAnalysisService:
     
     FRAMES_PER_VIDEO = 16
     FRAME_SIZE = 224
-    MODEL_PATH = "services/models/resnet_personality_model.pth"
+    # MODEL_PATH = "services/models/resnet_personality_model.pth"
+    MODEL_PATH = "services/models/resnet_personality_model_0311.pth"
     RESNET_VERSION = "resnet50"
-    AGGREGATION = "lstm"
+    AGGREGATION = "attention"
     
     TRAIT_NAMES = [
         "Extraversion",
@@ -151,12 +152,12 @@ class PersonalityAnalysisService:
                 self.model.load_state_dict(
                     torch.load(self.MODEL_PATH, map_location=self.device)
                 )
-                print(f"[Personality Service] ✅ Model loaded successfully from {self.MODEL_PATH}")
+                print(f"[Personality Service]  Model loaded successfully from {self.MODEL_PATH}")
             except Exception as e:
-                print(f"[Personality Service] ❌ Could not load model weights: {e}")
+                print(f"[Personality Service]  Could not load model weights: {e}")
                 print("[Personality Service] Using untrained model")
         else:
-            print(f"[Personality Service] ⚠️  No model found at {self.MODEL_PATH}")
+            print(f"[Personality Service]   No model found at {self.MODEL_PATH}")
             print("[Personality Service] Using untrained model")
         
         self.model.eval()

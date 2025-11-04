@@ -557,7 +557,7 @@ export default function InterviewAssistantPage() {
               onVideoReady={handlePracticeVideoComplete}
               maxDuration={60}
               minDuration={10}
-              allowUpload={false}
+              allowUpload={true}
             />
           )}
           

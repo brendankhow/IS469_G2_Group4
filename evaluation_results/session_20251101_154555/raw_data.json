@@ -1,0 +1,76 @@
+{
+  "total_comparisons": 1,
+  "comparisons": [
+    {
+      "query": "I'm looking for a software engineer with experience in frontend tech like typescript and javascript.",
+      "winner": "rule-based",
+      "winner_reason": "✅ Both achieved goal | 🎯 Rule-based found higher quality candidate (9.0 vs 6.0) | ⏱️ Similar speed (23.2s vs 32.5s) | 💰 Rule-based is 2.1x cheaper → Rule-based wins (3-0)",
+      "rule_based": {
+        "architecture": "rule-based",
+        "execution_time": 23.207780838012695,
+        "llm_calls": 1,
+        "total_tokens": 0,
+        "estimated_cost": 0.002,
+        "candidates_found": 1,
+        "top_fit_score": 9,
+        "avg_fit_score": 9,
+        "high_quality_count": 1,
+        "goal_achieved": true,
+        "iterations": 1
+      },
+      "agentic": {
+        "architecture": "agentic",
+        "execution_time": 32.46465992927551,
+        "llm_calls": 6,
+        "total_tokens": 2068,
+        "estimated_cost": 0.004136,
+        "candidates_found": 1,
+        "top_fit_score": 6,
+        "avg_fit_score": 6,
+        "high_quality_count": 1,
+        "goal_achieved": true,
+        "iterations": 5
+      },
+      "comparison": {
+        "speedup_factor": 0.7148628967181855,
+        "cost_ratio": 2.068,
+        "quality_improvement": -3
+      },
+      "breakdown": {
+        "speed": {
+          "rule_based_time": 23.207780838012695,
+          "agentic_time": 32.46465992927551,
+          "speedup_factor": 0.7148628967181855,
+          "winner": "rule-based"
+        },
+        "cost": {
+          "rule_based_cost": 0.002,
+          "agentic_cost": 0.004136,
+          "cost_ratio": 2.068,
+          "winner": "rule-based"
+        },
+        "quality": {
+          "rule_based_top_score": 9,
+          "agentic_top_score": 6,
+          "improvement": -3,
+          "winner": "rule-based"
+        },
+        "efficiency": {
+          "rule_based_llm_calls": 1,
+          "agentic_llm_calls": 6,
+          "llm_call_ratio": 6.0
+        },
+        "coverage": {
+          "rule_based_candidates": 1,
+          "agentic_candidates": 1,
+          "difference": 0
+        },
+        "goal_achievement": {
+          "rule_based": true,
+          "agentic": true,
+          "winner": "tie"
+        }
+      }
+    }
+  ]
+}
