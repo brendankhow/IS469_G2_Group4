@@ -623,19 +623,19 @@ class VectorStore:
         """
         all_documents = []
 
-        # get github documents first (for lookup)
-        github_response = supabase.table("github_embeddings_with_profile")\
-            .select("student_id, document_id, text, repo_name, github_username, metadata, student_name, student_email")\
+        # get profile info for lookup
+        profile_response = supabase.table("profiles")\
+            .select("id, name, email, github_username")\
             .execute()
 
-        github_lookup = {
-            g["student_id"]: {
-                "student_name": g.get("student_name"),
-                "student_email": g.get("student_email"),
-                "github_username": g.get("github_username")
+        profile_lookup = {
+            p["id"]: {
+                "student_name": p.get("name"),
+                "student_email": p.get("email"),
+                "github_username": p.get("github_username")
             }
-            for g in github_response.data
-            if g.get("student_id")
+            for p in profile_response.data
+            if p.get("id")
         }
 
         # get and add all resume documents
@@ -644,14 +644,13 @@ class VectorStore:
             .execute()
 
         for resume in resume_response.data:
-
             if not resume.get('resume_text') or not resume['resume_text'].strip():
                 continue
 
             student_id = resume['student_id']
 
-            # to get student_name and student_email from github table to fill in for each matching student_id from resume table
-            github_info = github_lookup.get(student_id, {})
+            # lookup profile info
+            profile_info = profile_lookup.get(student_id, {})
 
             all_documents.append({
                 "doc_id": f"resume_{student_id}",
@@ -660,20 +659,24 @@ class VectorStore:
                 "source": "resume",
                 "filename": resume.get('filename', 'unknown'),
                 "metadata": resume.get('metadata', {}),
-                "student_name": github_info.get("student_name"),
-                "student_email": github_info.get("student_email"),
-                "github_username": github_info.get("github_username")
+                "student_name": profile_info.get("student_name"),
+                "student_email": profile_info.get("student_email"),
+                "github_username": profile_info.get("github_username")
             })
 
-        # add github documents
+        # get and add all github documents
+        github_response = supabase.table("github_embeddings_with_profile")\
+            .select("student_id, document_id, text, repo_name, github_username, metadata, student_name, student_email")\
+            .execute()
+
         for github_doc in github_response.data:
             if not github_doc.get('text') or not github_doc['text'].strip():
                 continue
 
             all_documents.append({
-                "doc_id": github_doc['document_id'],
+                "doc_id": github_doc.get('document_id'),
                 "student_id": github_doc['student_id'],
-                "text": github_doc['text'],
+                "text": github_doc.get('text'),
                 "source": "github",
                 "repo_name": github_doc.get('repo_name', 'unknown'),
                 "github_username": github_doc.get('github_username'),
