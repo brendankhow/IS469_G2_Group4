@@ -96,7 +96,7 @@ class CustomRAGEvaluator:
 
 
 if __name__ == "__main__":
-    evaluator = CustomRAGEvaluator(top_k=2)
+    evaluator = CustomRAGEvaluator(top_k=3)
     test_cases = [
         {
             "question": "Candidates with Python and machine learning experience",
