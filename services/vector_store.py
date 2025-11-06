@@ -558,13 +558,14 @@ class VectorStore:
     ) -> List[Dict]:
         """
         Search for relevant graph nodes (chunks/entities) globally across all students.
-        Optional filters can restrict results by skills, roles, language, or source.
+        Optional filters can restrict results by skills, roles, language, source, or email.
         
         Supported filters:
         - filter_skill: Filter by skills
         - filter_role: Filter by role
         - filter_language: Filter by programming language (e.g., "JavaScript", "Python")
         - filter_source: Filter by source type ("resume" or "github")
+        - filter_emails: Filter by student emails (List[str])
         """
 
         params = {
@@ -583,6 +584,8 @@ class VectorStore:
                 params['filter_language'] = filters['filter_language']
             if 'filter_source' in filters:
                 params['filter_source'] = filters['filter_source']
+            if 'filter_emails' in filters:
+                params['filter_emails'] = filters['filter_emails']
             
         try:
             print(f"Executing RPC match_graph_nodes with params: {list(params.keys())}")
@@ -620,35 +623,50 @@ class VectorStore:
         """
         all_documents = []
 
-        # get all resume documents
+        # get github documents first (for lookup)
+        github_response = supabase.table("github_embeddings_with_profile")\
+            .select("student_id, document_id, text, repo_name, github_username, metadata, student_name, student_email")\
+            .execute()
 
+        github_lookup = {
+            g["student_id"]: {
+                "student_name": g.get("student_name"),
+                "student_email": g.get("student_email"),
+                "github_username": g.get("github_username")
+            }
+            for g in github_response.data
+            if g.get("student_id")
+        }
+
+        # get and add all resume documents
         resume_response = supabase.table("resume_embeddings")\
             .select("student_id, resume_text, filename, metadata")\
             .execute()
 
         for resume in resume_response.data:
-            # skip empty resumes
+
             if not resume.get('resume_text') or not resume['resume_text'].strip():
                 continue
 
+            student_id = resume['student_id']
+
+            # to get student_name and student_email from github table to fill in for each matching student_id from resume table
+            github_info = github_lookup.get(student_id, {})
+
             all_documents.append({
-                "doc_id": f"resume_{resume['student_id']}",
-                "student_id": resume['student_id'],
+                "doc_id": f"resume_{student_id}",
+                "student_id": student_id,
                 "text": resume['resume_text'],
                 "source": "resume",
                 "filename": resume.get('filename', 'unknown'),
                 "metadata": resume.get('metadata', {}),
-                "github_username": None
+                "student_name": github_info.get("student_name"),
+                "student_email": github_info.get("student_email"),
+                "github_username": github_info.get("github_username")
             })
 
-        # get all github documents
-
-        github_response = supabase.table("github_embeddings_with_profile")\
-            .select("student_id, document_id, text, repo_name, github_username, metadata, student_name, student_email")\
-            .execute()
-
+        # add github documents
         for github_doc in github_response.data:
-            # skip empty documents
             if not github_doc.get('text') or not github_doc['text'].strip():
                 continue
 
