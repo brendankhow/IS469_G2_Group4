@@ -558,13 +558,14 @@ class VectorStore:
     ) -> List[Dict]:
         """
         Search for relevant graph nodes (chunks/entities) globally across all students.
-        Optional filters can restrict results by skills, roles, language, or source.
+        Optional filters can restrict results by skills, roles, language, source, or email.
         
         Supported filters:
         - filter_skill: Filter by skills
         - filter_role: Filter by role
         - filter_language: Filter by programming language (e.g., "JavaScript", "Python")
         - filter_source: Filter by source type ("resume" or "github")
+        - filter_emails: Filter by student emails (List[str])
         """
 
         params = {
@@ -583,6 +584,8 @@ class VectorStore:
                 params['filter_language'] = filters['filter_language']
             if 'filter_source' in filters:
                 params['filter_source'] = filters['filter_source']
+            if 'filter_emails' in filters:
+                params['filter_emails'] = filters['filter_emails']
             
         try:
             print(f"Executing RPC match_graph_nodes with params: {list(params.keys())}")
