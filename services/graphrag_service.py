@@ -265,23 +265,28 @@ class GraphRAGService:
         top_k: int = 3,
         nodes_per_candidate: int = 5,
         filters: Optional[Dict] = None,
-        use_reranking: bool = False     # can change to True if we want reranking enabled
+        use_reranking: bool = False,    # can change to True if we want reranking enabled
+        neighbor_depth: int = 2         # how many graph hops to include
     ) -> Dict:
         """
-        Search GraphRAG nodes and return top_k candidates with balanced representation.
-        
+        Search GraphRAG nodes and return top_k candidates.
+
         Args:
             query_text: Search query
             top_k: Number of candidates to return (default: 3)
             nodes_per_candidate: Maximum nodes per candidate to prevent imbalance
             filters: Optional filters for search
             use_reranking: Whether to apply cross-encoder reranking at candidate level (but default value is False)
+            neighbor_depth: Depth of neighbor traversal in graph for context
+
+        Returns:
+            Dict with structured JSON of top candidates
         """
         try:
             logger.info(f"Processing query: {query_text[:100]}")
 
             query_embedding = custom_embed_model.get_query_embedding(query_text)
-            
+
             # retrieve more nodes initially to ensure candidate diversity
             initial_retrieval_size = top_k * nodes_per_candidate * 4
             retrieved_nodes = VectorStore.search_graph_nodes(
@@ -294,10 +299,29 @@ class GraphRAGService:
             if not retrieved_nodes:
                 return {"success": True, "query": query_text, "results": []}
 
+            # expand nodes using graph neighbours
+            expanded_nodes = []
+            for node in retrieved_nodes:
+                expanded_nodes.append(node)
+                if neighbor_depth > 0 and hasattr(node, "node_id"):
+                    # get neighbours from the PropertyGraphIndex
+                    try:
+                        neighbors = index.get_neighbors(node["node_id"], depth=neighbor_depth)
+                        for n in neighbors:
+                            n_metadata = n.metadata if hasattr(n, "metadata") else {}
+                            expanded_nodes.append({
+                                "student_id": n_metadata.get("student_id"),
+                                "text": n.get_content() if hasattr(n, "get_content") else str(n),
+                                "metadata": n_metadata,
+                                "similarity": node.get("similarity", 0.0)
+                            })
+                    except Exception as e:
+                        logger.warning(f"Failed to get neighbors for node {node.get('node_id')}: {str(e)}")
+
             # group nodes by candidate with diversity control
             student_contexts = {}
-            
-            for node in retrieved_nodes:
+
+            for node in expanded_nodes:
                 sid = node.get("student_id")
                 similarity = node.get("similarity", 0.0)
 
