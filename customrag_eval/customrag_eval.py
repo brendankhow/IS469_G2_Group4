@@ -82,7 +82,7 @@ class CustomRAGEvaluator:
             latencies.append(latency)
 
             print(f"Query: {query[:50]}...")
-            print(f"Top {self.top_k} candidates: {[r.get('student_name') for r in results]}")
+            print(f"Top {self.top_k} candidates: {[r.get('student_id') for r in results]}")
             print(f"MRR: {mrrs[-1]:.2f}, Precision@{self.top_k}: {precisions[-1]:.2f}, Recall@{self.top_k}: {recalls[-1]:.2f}, "
                   f"AnswerSim: {answer_sims[-1]:.2f}, Latency: {latency:.2f}s\n")
 
@@ -101,92 +101,106 @@ if __name__ == "__main__":
         {
             "question": "Candidates with Python and machine learning experience",
             "expected_ids": {
-                "f7994298-54cf-487b-8447-3166c800eab2",  # Alex Rivera (01@test.com)
-                "b834bf2b-eb5e-46a7-b4d5-9fcdccf01175",  # Jordan Lee (02@test.com)
-                "50773359-77d3-49d9-9524-4051ac2ecfde"   # Riley Chen (05@test.com)
+                "f7994298-54cf-487b-8447-3166c800eab2",     # Alex Rivera (01@test.com)
+                "b834bf2b-eb5e-46a7-b4d5-9fcdccf01175",     # Jordan Lee (02@test.com)
+                "735b6edb-738a-4d72-9443-8b3d2da43380",     # Casey Patel (04@test.com)
+                "59fb0410-b473-49b4-8045-b8f4a95e939c",     # Sam Patel (11@test.com)
+                "a3500714-13f5-4378-bff3-641f9c6499e8",     # Jordan (12@test.com)
+                "afbe87fb-5197-44ca-9ec7-e26229cebb86"      # Casey Garcia (15@test.com)
             },
-            "ground_truth": "Candidates strong in Python, ML, and data projects."
+            "ground_truth": "Candidates strong in Python, ML, and data projects.",
         },
         {
             "question": "Software engineers familiar with React and Node.js",
             "expected_ids": {
-                "f7994298-54cf-487b-8447-3166c800eab2",  # Alex Rivera
-                "735b6edb-738a-4d72-9443-8b3d2da43380",  # Casey Patel (04@test.com)
-                "62566f05-dbf1-4ab3-9f6a-edfaf752d1df"   # Jordan Morales (07@test.com)
+                "f7994298-54cf-487b-8447-3166c800eab2",     # Alex Rivera (01@test.com)
+                "b834bf2b-eb5e-46a7-b4d5-9fcdccf01175",     # Jordan Lee (02@test.com)
+                "afbe87fb-5197-44ca-9ec7-e26229cebb86"      # Casey Garcia (15@test.com)
             },
-            "ground_truth": "Candidates experienced with full-stack web development."
+            "ground_truth": "Candidates experienced with full-stack web development.",
         },
         {
             "question": "Students skilled in Java and OOP principles",
             "expected_ids": {
-                "59fb0410-b473-49b4-8045-b8f4a95e939c",  # Sam Patel (11@test.com)
-                "f7994298-54cf-487b-8447-3166c800eab2",  # Alex Rivera
-                "afbe87fb-5197-44ca-9ec7-e26229cebb86"   # Casey Garcia (15@test.com)
+                "f7994298-54cf-487b-8447-3166c800eab2",     # Alex Rivera (01@test.com)
+                "b834bf2b-eb5e-46a7-b4d5-9fcdccf01175",     # Jordan Lee (02@test.com)
+                "735b6edb-738a-4d72-9443-8b3d2da43380",     # Casey Patel (04@test.com)
+                "59fb0410-b473-49b4-8045-b8f4a95e939c",     # Sam Patel (11@test.com)
+                "a3500714-13f5-4378-bff3-641f9c6499e8",     # Jordan (12@test.com)
+                "afbe87fb-5197-44ca-9ec7-e26229cebb86"      # Casey Garcia (15@test.com)
             },
-            "ground_truth": "Candidates with strong Java programming and OOP experience."
+            "ground_truth": "Candidates with strong Java programming and OOP experience.",
         },
         {
             "question": "Data engineers with SQL and AWS experience",
             "expected_ids": {
-                "b834bf2b-eb5e-46a7-b4d5-9fcdccf01175",  # Jordan Lee
-                "a3500714-13f5-4378-bff3-641f9c6499e8",  # Jordan Reyes (12@test.com)
-                "f464a977-43f8-4cc0-8900-74df11a60c56"   # Jordan Patel (18@test.com)
+                "f7994298-54cf-487b-8447-3166c800eab2",     # Alex Rivera (01@test.com)
+                "b834bf2b-eb5e-46a7-b4d5-9fcdccf01175",     # Jordan Lee (02@test.com)
+                "735b6edb-738a-4d72-9443-8b3d2da43380",     # Casey Patel (04@test.com)
+                "a3500714-13f5-4378-bff3-641f9c6499e8",     # Jordan (12@test.com)
+                "afbe87fb-5197-44ca-9ec7-e26229cebb86"      # Casey Garcia (15@test.com)
             },
-            "ground_truth": "Candidates proficient in SQL databases, AWS, and data pipelines."
+            "ground_truth": "Candidates proficient in SQL databases, AWS, and data pipelines.",
         },
         {
             "question": "Machine learning researchers with PyTorch experience",
             "expected_ids": {
-                "50773359-77d3-49d9-9524-4051ac2ecfde",  # Riley Chen
-                "ada5a310-2c70-40c1-a0d4-73c9401013c9",  # Alex Thompson (08@test.com)
-                "f7994298-54cf-487b-8447-3166c800eab2"   # Alex Rivera
+                "a3500714-13f5-4378-bff3-641f9c6499e8",     # Jordan (12@test.com)
+                "afbe87fb-5197-44ca-9ec7-e26229cebb86"      # Casey Garcia (15@test.com)
             },
-            "ground_truth": "Candidates who have built ML models using PyTorch or TensorFlow."
+            "ground_truth": "Candidates who have built ML models using PyTorch or TensorFlow.",
         },
         {
             "question": "Web developers familiar with HTML, CSS, and JavaScript",
             "expected_ids": {
-                "3340f305-ab0b-47b9-a00d-22f438951950",  # Taylor Lee (14@test.com)
-                "f7994298-54cf-487b-8447-3166c800eab2",  # Alex Rivera
-                "735b6edb-738a-4d72-9443-8b3d2da43380"   # Casey Patel
+                "f7994298-54cf-487b-8447-3166c800eab2",     # Alex Rivera (01@test.com)
+                "b834bf2b-eb5e-46a7-b4d5-9fcdccf01175",     # Jordan Lee (02@test.com)
+                "735b6edb-738a-4d72-9443-8b3d2da43380",     # Casey Patel (04@test.com)
+                "59fb0410-b473-49b4-8045-b8f4a95e939c",     # Sam Patel (11@test.com)
+                "a3500714-13f5-4378-bff3-641f9c6499e8",     # Jordan (12@test.com)
+                "afbe87fb-5197-44ca-9ec7-e26229cebb86"      # Casey Garcia (15@test.com)
             },
-            "ground_truth": "Candidates with front-end development experience."
+            "ground_truth": "Candidates with front-end development experience.",
         },
         {
             "question": "Students with GitHub portfolios showcasing projects",
             "expected_ids": {
-                "f7994298-54cf-487b-8447-3166c800eab2",  # Alex Rivera
-                "b834bf2b-eb5e-46a7-b4d5-9fcdccf01175",  # Jordan Lee
-                "735b6edb-738a-4d72-9443-8b3d2da43380"   # Casey Patel
+                "f7994298-54cf-487b-8447-3166c800eab2",     # Alex Rivera (01@test.com)
+                "b834bf2b-eb5e-46a7-b4d5-9fcdccf01175",     # Jordan Lee (02@test.com)
+                "735b6edb-738a-4d72-9443-8b3d2da43380",     # Casey Patel (04@test.com)
+                "59fb0410-b473-49b4-8045-b8f4a95e939c",     # Sam Patel (11@test.com)
+                "a3500714-13f5-4378-bff3-641f9c6499e8",     # Jordan (12@test.com)
+                "afbe87fb-5197-44ca-9ec7-e26229cebb86"      # Casey Garcia (15@test.com)
             },
-            "ground_truth": "Candidates with active GitHub profiles demonstrating technical work."
+            "ground_truth": "Candidates with active GitHub profiles demonstrating technical work.",
         },
         {
             "question": "Interns with experience in teaching or mentoring CS students",
             "expected_ids": {
-                "b834bf2b-eb5e-46a7-b4d5-9fcdccf01175",  # Jordan Lee
-                "59fb0410-b473-49b4-8045-b8f4a95e939c",  # Sam Patel
-                "afbe87fb-5197-44ca-9ec7-e26229cebb86"   # Casey Garcia
+                "f7994298-54cf-487b-8447-3166c800eab2",     # Alex Rivera (01@test.com)
+                "b834bf2b-eb5e-46a7-b4d5-9fcdccf01175",     # Jordan Lee (02@test.com)
+                "afbe87fb-5197-44ca-9ec7-e26229cebb86"      # Casey Garcia (15@test.com)
             },
-            "ground_truth": "Candidates who have tutored, mentored, or taught CS topics."
+            "ground_truth": "Candidates who have tutored, mentored, or taught CS topics.",
         },
         {
             "question": "Students with experience in cloud platforms or Docker",
             "expected_ids": {
-                "b834bf2b-eb5e-46a7-b4d5-9fcdccf01175",  # Jordan Lee
-                "735b6edb-738a-4d72-9443-8b3d2da43380",  # Casey Patel
-                "81a0fa5d-5de7-4708-b5b2-960b33229521"   # Morgan Singh (06@test.com)
+                "f7994298-54cf-487b-8447-3166c800eab2",     # Alex Rivera (01@test.com)
+                "b834bf2b-eb5e-46a7-b4d5-9fcdccf01175",     # Jordan Lee (02@test.com)
+                "735b6edb-738a-4d72-9443-8b3d2da43380",     # Casey Patel (04@test.com)
             },
-            "ground_truth": "Candidates familiar with AWS, Docker, or cloud-based workflows."
+            "ground_truth": "Candidates familiar with AWS, Docker, or cloud-based workflows.",
         },
         {
             "question": "Candidates with skills in data visualization and reporting",
             "expected_ids": {
-                "b834bf2b-eb5e-46a7-b4d5-9fcdccf01175",  # Jordan Lee
-                "a3500714-13f5-4378-bff3-641f9c6499e8",  # Jordan Reyes
-                "0c0909b7-ceb6-40bd-88ec-3d9fbf7f0636"   # Riley Thompson (16@test.com)
+                "b834bf2b-eb5e-46a7-b4d5-9fcdccf01175",     # Jordan Lee (02@test.com)
+                "735b6edb-738a-4d72-9443-8b3d2da43380",     # Casey Patel (04@test.com)
+                "a3500714-13f5-4378-bff3-641f9c6499e8",     # Jordan (12@test.com)
+                "afbe87fb-5197-44ca-9ec7-e26229cebb86"      # Casey Garcia (15@test.com)
             },
-            "ground_truth": "Candidates able to process data and create visual reports."
+            "ground_truth": "Candidates able to process data and create visual reports.",
         },
     ]
 
